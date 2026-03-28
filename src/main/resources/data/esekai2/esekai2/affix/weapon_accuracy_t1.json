@@ -1,0 +1,17 @@
+{
+  "translation_key": "affix.esekai2.weapon_accuracy_t1",
+  "kind": "suffix",
+  "group_id": "esekai2:weapon_accuracy",
+  "tier": 1,
+  "minimum_item_level": 12,
+  "scope": "local",
+  "item_families": ["weapon"],
+  "modifier_ranges": [
+    {
+      "stat": "esekai2:accuracy",
+      "operation": "add",
+      "min_value": 12.0,
+      "max_value": 24.0
+    }
+  ]
+}

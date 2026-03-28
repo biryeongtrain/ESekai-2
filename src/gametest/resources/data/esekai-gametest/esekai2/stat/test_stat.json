@@ -1,0 +1,6 @@
+{
+  "translation_key": "stat.esekai_gametest.test_stat",
+  "default_value": 10.0,
+  "min_value": 0.0,
+  "max_value": 100.0
+}

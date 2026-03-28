@@ -1,0 +1,126 @@
+{
+  "identifier": "esekai2:fireball",
+  "config": {
+    "resource_cost": 12.0,
+    "cast_time_ticks": 16,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell",
+      "projectile",
+      "aoe"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "map": {
+              "sound": "minecraft:item.trident.throw"
+            }
+          },
+          {
+            "type": "projectile",
+            "map": {
+              "entity_name": "default_entity_name",
+              "proj_en": "esekai2:skill_projectile",
+              "life_ticks": "10",
+              "gravity": "false"
+            }
+          },
+          {
+            "type": "sandstorm_particle",
+            "map": {
+              "particle_id": "sandstorm:flame",
+              "anchor": "caster_hand",
+              "offset_y": "0.5"
+            }
+          }
+        ]
+      }
+    ],
+    "entity_components": {
+      "default_entity_name": [
+        {
+          "targets": [
+            {
+              "type": "target"
+            }
+          ],
+          "acts": [
+            {
+              "type": "damage",
+              "map": {
+                "hit_kind": "spell",
+                "base_damage_fire": "18.0",
+                "base_critical_strike_chance": "6.0",
+                "base_critical_strike_multiplier": "160.0"
+              }
+            }
+          ],
+          "ifs": [
+            {
+              "type": "on_hit"
+            }
+          ]
+        },
+        {
+          "targets": [
+            {
+              "type": "aoe",
+              "map": {
+                "radius": "3.0"
+              }
+            }
+          ],
+          "acts": [
+            {
+              "type": "sandstorm_particle",
+              "map": {
+                "particle_id": "sandstorm:trail",
+                "anchor": "impact_point",
+                "offset_y": "0.25"
+              }
+            }
+          ],
+          "ifs": [
+            {
+              "type": "x_ticks_condition",
+              "map": {
+                "tick_rate": "2"
+              }
+            }
+          ]
+        },
+        {
+          "targets": [
+            {
+              "type": "target"
+            }
+          ],
+          "acts": [
+            {
+              "type": "summon_block",
+              "map": {
+                "entity_name": "impact_block",
+                "block": "minecraft:ender_chest",
+                "life_ticks": "4"
+              }
+            }
+          ],
+          "ifs": [
+            {
+              "type": "on_entity_expire"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

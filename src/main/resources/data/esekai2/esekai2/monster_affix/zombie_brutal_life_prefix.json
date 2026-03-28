@@ -1,0 +1,18 @@
+{
+  "translation_key": "affix.esekai2.monster.zombie_brutal_life_prefix",
+  "kind": "prefix",
+  "weight": 1,
+  "minimum_monster_level": 1,
+  "allowed_rarities": [
+    "magic",
+    "rare"
+  ],
+  "modifier_ranges": [
+    {
+      "stat": "esekai2:life",
+      "operation": "add",
+      "min_value": 200.0,
+      "max_value": 200.0
+    }
+  ]
+}

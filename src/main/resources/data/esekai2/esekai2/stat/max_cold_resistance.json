@@ -1,0 +1,5 @@
+{
+  "translation_key": "stat.esekai2.max_cold_resistance",
+  "default_value": 75.0,
+  "min_value": 0.0
+}

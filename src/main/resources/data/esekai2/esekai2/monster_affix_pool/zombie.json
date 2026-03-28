@@ -1,0 +1,15 @@
+{
+  "entity_type": "minecraft:zombie",
+  "default_spawn_context": {
+    "level": 68,
+    "rarity": "magic",
+    "map_monster": false,
+    "boss_monster": false
+  },
+  "candidate_affix_ids": [
+    "esekai2:zombie_brutal_life_prefix",
+    "esekai2:zombie_hardened_armour_prefix",
+    "esekai2:zombie_fetid_chaos_suffix",
+    "esekai2:zombie_skulking_evasion_suffix"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "translation_key": "affix.esekai2.monster.zombie_hardened_armour_prefix",
+  "kind": "prefix",
+  "weight": 1,
+  "minimum_monster_level": 1,
+  "allowed_rarities": [
+    "rare"
+  ],
+  "modifier_ranges": [
+    {
+      "stat": "esekai2:armour",
+      "operation": "add",
+      "min_value": 25.0,
+      "max_value": 25.0
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "entity_type": "minecraft:zombie",
+  "base_stats": {
+    "esekai2:armour": 5.0
+  },
+  "scaled_stats": {
+    "esekai2:life": "life",
+    "esekai2:evade": "evade",
+    "esekai2:accuracy": "accuracy"
+  }
+}

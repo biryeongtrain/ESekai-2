@@ -1,0 +1,18 @@
+{
+  "translation_key": "affix.esekai2.monster.zombie_fetid_chaos_suffix",
+  "kind": "suffix",
+  "weight": 1,
+  "minimum_monster_level": 1,
+  "allowed_rarities": [
+    "magic",
+    "rare"
+  ],
+  "modifier_ranges": [
+    {
+      "stat": "esekai2:chaos_resistance",
+      "operation": "add",
+      "min_value": 17.0,
+      "max_value": 17.0
+    }
+  ]
+}

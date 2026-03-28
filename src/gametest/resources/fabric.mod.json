@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "esekai-gametest",
+  "version": "1.0.0",
+  "name": "Esekai Gametest",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "kim.biryeong.esekai2.impl.gametest.core.SmokeGameTests",
+      "kim.biryeong.esekai2.impl.gametest.stat.StatHolderGameTests",
+      "kim.biryeong.esekai2.impl.gametest.stat.CombatStatsGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageTypeGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageBreakdownGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageMitigationGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageCalculationGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.AccuracyEvasionGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.CriticalStrikeGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageOverTimeGameTests",
+      "kim.biryeong.esekai2.impl.gametest.damage.DamageTransformationGameTests",
+      "kim.biryeong.esekai2.impl.gametest.item.ItemAffixGameTests",
+      "kim.biryeong.esekai2.impl.gametest.item.ItemLevelGameTests",
+      "kim.biryeong.esekai2.impl.gametest.level.LevelProgressionGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillTagGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillExecutionGameTests",
+      "kim.biryeong.esekai2.impl.gametest.monster.MonsterLevelGameTests",
+      "kim.biryeong.esekai2.impl.gametest.monster.MonsterStatGameTests",
+      "kim.biryeong.esekai2.impl.gametest.monster.MonsterAffixGameTests"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": [
+      "26.1"
+    ],
+    "fabric-api": "*"
+  }
+}

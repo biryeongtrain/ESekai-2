@@ -1,0 +1,17 @@
+{
+  "translation_key": "affix.esekai2.trinket_life_t2",
+  "kind": "prefix",
+  "group_id": "esekai2:trinket_life",
+  "tier": 2,
+  "minimum_item_level": 10,
+  "scope": "global",
+  "item_families": ["trinket"],
+  "modifier_ranges": [
+    {
+      "stat": "esekai2:life",
+      "operation": "add",
+      "min_value": 5.0,
+      "max_value": 10.0
+    }
+  ]
+}

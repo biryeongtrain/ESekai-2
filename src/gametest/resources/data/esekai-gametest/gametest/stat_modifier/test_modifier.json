@@ -1,0 +1,6 @@
+{
+  "stat": "esekai-gametest:test_stat",
+  "operation": "increased",
+  "value": 15.0,
+  "source_id": "esekai-gametest:test_fixture"
+}
