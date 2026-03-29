@@ -116,5 +116,4 @@ public record SkillCalculationDefinition(
         }
         return DataResult.success(definition);
     }
-
 }

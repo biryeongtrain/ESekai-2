@@ -12,11 +12,11 @@
   "attached": {
     "on_cast": [
       {
-        "targets": [
-          {
-            "type": "target"
-          }
-        ],
+          "targets": [
+            {
+              "type": "target"
+            }
+          ],
           "acts": [
             {
               "type": "sound",

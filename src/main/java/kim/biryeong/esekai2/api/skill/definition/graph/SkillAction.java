@@ -2,7 +2,11 @@ package kim.biryeong.esekai2.api.skill.definition.graph;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.MapDecoder;
+import com.mojang.serialization.MapLike;
+import com.mojang.serialization.Encoder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
@@ -10,12 +14,13 @@ import kim.biryeong.esekai2.api.damage.critical.HitKind;
 import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import net.minecraft.resources.Identifier;
 
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 /**
  * Typed action node carried by a skill rule.
@@ -114,10 +119,29 @@ public record SkillAction(
                     .forGetter(SkillAction::legacyParameters)
     ).apply(instance, SkillAction::fromCodec));
 
+    private static final MapDecoder<SkillAction> LEGACY_MAP_DECODER = new MapDecoder.Implementation<>() {
+        @Override
+        public <T> DataResult<SkillAction> decode(DynamicOps<T> ops, MapLike<T> input) {
+            DataResult<SkillActionType> typeResult = readRequiredField(ops, input, "type", SkillActionType.CODEC);
+            return typeResult.map(type -> decodeLegacyAction(ops, input, type));
+        }
+
+        @Override
+        public <T> Stream<T> keys(DynamicOps<T> ops) {
+            return Stream.empty();
+        }
+    };
+
+    private static final Codec<SkillAction> LEGACY_CODEC = Codec.of(
+            Encoder.error("Legacy SkillAction codec is decode-only"),
+            LEGACY_MAP_DECODER.decoder(),
+            "SkillActionLegacyCodec"
+    );
+
     /**
      * Validated codec used to decode typed action blocks.
      */
-    public static final Codec<SkillAction> CODEC = BASE_CODEC.validate(SkillAction::validate);
+    public static final Codec<SkillAction> CODEC = Codec.withAlternative(BASE_CODEC, LEGACY_CODEC).validate(SkillAction::validate);
 
     private IdentityPayload identityPayload() {
         return new IdentityPayload(type, componentId, entityId, blockId, soundId, particleId, calculationId);
@@ -258,6 +282,99 @@ public record SkillAction(
                 offsetZ,
                 runtime.enPreds()
         );
+    }
+
+    private static <T, A> DataResult<A> readRequiredField(DynamicOps<T> ops, MapLike<T> input, String key, Codec<A> codec) {
+        T value = input.get(key);
+        if (value == null) {
+            return DataResult.error(() -> "No key " + key + " in " + input);
+        }
+        return codec.parse(ops, value);
+    }
+
+    private static <T, A> Optional<A> readOptionalField(DynamicOps<T> ops, MapLike<T> input, String key, Codec<A> codec) {
+        T value = input.get(key);
+        if (value == null) {
+            return Optional.empty();
+        }
+        return codec.parse(ops, value).result();
+    }
+
+    private static <T> SkillAction decodeLegacyAction(DynamicOps<T> ops, MapLike<T> input, SkillActionType type) {
+        String componentId = readOptionalField(ops, input, "component_id", Codec.STRING)
+                .orElseGet(() -> readOptionalField(ops, input, "entity_name", Codec.STRING).orElse(""));
+        String entityId = readOptionalField(ops, input, "entity_id", Codec.STRING)
+                .orElseGet(() -> readOptionalField(ops, input, "proj_en", Codec.STRING).orElse(""));
+        String blockId = readOptionalField(ops, input, "block_id", Codec.STRING)
+                .orElseGet(() -> readOptionalField(ops, input, "block", Codec.STRING).orElse(""));
+        String soundId = readOptionalField(ops, input, "sound_id", Codec.STRING)
+                .orElseGet(() -> readOptionalField(ops, input, "sound", Codec.STRING).orElse(""));
+        String particleId = readOptionalField(ops, input, "particle_id", Codec.STRING).orElse("");
+        String calculationId = readOptionalField(ops, input, "calculation_id", Codec.STRING).orElse("");
+        HitKind hitKind = readOptionalField(ops, input, "hit_kind", HitKind.CODEC).orElse(HitKind.ATTACK);
+        Map<DamageType, SkillValueExpression> baseDamage = readLegacyBaseDamage(ops, input);
+        SkillValueExpression baseCriticalStrikeChance = readOptionalField(ops, input, "base_critical_strike_chance", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression baseCriticalStrikeMultiplier = readOptionalField(ops, input, "base_critical_strike_multiplier", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(100.0));
+        SkillValueExpression volume = readOptionalField(ops, input, "volume", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(1.0));
+        SkillValueExpression pitch = readOptionalField(ops, input, "pitch", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(1.0));
+        SkillValueExpression lifeTicks = readOptionalField(ops, input, "life_ticks", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        boolean gravity = readOptionalField(ops, input, "gravity", Codec.BOOL).orElse(false);
+        String anchor = readOptionalField(ops, input, "anchor", Codec.STRING).orElse("self");
+        SkillValueExpression offsetX = readOptionalField(ops, input, "offset_x", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression offsetY = readOptionalField(ops, input, "offset_y", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression offsetZ = readOptionalField(ops, input, "offset_z", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        List<SkillPredicate> enPreds = readOptionalField(ops, input, "en_preds", SkillPredicate.CODEC.listOf())
+                .orElse(List.of());
+
+        return new SkillAction(
+                type,
+                componentId,
+                entityId,
+                blockId,
+                soundId,
+                particleId,
+                calculationId,
+                hitKind,
+                baseDamage,
+                baseCriticalStrikeChance,
+                baseCriticalStrikeMultiplier,
+                volume,
+                pitch,
+                lifeTicks,
+                gravity,
+                anchor,
+                offsetX,
+                offsetY,
+                offsetZ,
+                enPreds
+        );
+    }
+
+    private static <T> Map<DamageType, SkillValueExpression> readLegacyBaseDamage(DynamicOps<T> ops, MapLike<T> input) {
+        Map<DamageType, SkillValueExpression> parsed = new EnumMap<>(DamageType.class);
+        input.entries().forEach(entry -> {
+            String key = ops.getStringValue(entry.getFirst()).result().orElse("");
+            if (!key.startsWith("base_damage_")) {
+                return;
+            }
+            DamageType damageType = parseDamageType(key.substring("base_damage_".length()));
+            if (damageType == null) {
+                return;
+            }
+            SkillValueExpression expression = SkillValueExpression.CODEC.parse(ops, entry.getSecond())
+                    .result()
+                    .orElse(SkillValueExpression.constant(0.0));
+            parsed.put(damageType, expression);
+        });
+        return Map.copyOf(parsed);
     }
 
     public SkillAction {

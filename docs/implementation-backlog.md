@@ -216,10 +216,15 @@
    - linked support merge 순서는 같은 link group 내 `socketIndex` 오름차순으로 고정되며, 같은 action override 충돌 시 더 높은 socket index 가 최종값을 덮어씁니다.
    - support appended rule 은 기존 `SkillRule` 을 그대로 사용해 `ifs` 와 `en_preds` 를 포함할 수 있고, unknown entity component target 은 preparation warning 으로 안전하게 무시됩니다.
 
+31. AoE-style calculation/predicate expansion
+   - skill graph 의 주요 numeric payload 가 `SkillValueExpression` 기반 typed schema 로 정리되어 `SkillAction`, `SkillTargetSelector`, `SkillCondition`, `SkillPredicate` 에 연결되어 있습니다.
+   - `esekai2:skill_value` registry 와 typed `SkillCalculationDefinition` 이 추가되어 reusable scalar/value ref 와 calculation ref 를 datapack 에서 해석할 수 있습니다.
+   - route/selector/action predicate 가 runtime prepare/execute path 와 support/selected cast path 위에서 동작하며, required Fabric GameTest 168개가 green 입니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 165개 전부 통과입니다.
+- 최신 안정 기준에서는 required Fabric GameTest 168개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -379,8 +384,6 @@
      - AoE 의 `particles_in_radius` 를 그대로 복제하지 않고 ESekai 는 `sandstorm_particle` action 을 도입한다.
      - `sandstorm_particle` action 은 `particle_id` 만 받고, 실제 파티클 authoring 은 Sandstorm 쪽에 둔다.
      - AoE 의 `value_calculation` 류 참조는 ESekai 쪽 `calculation_id` 또는 동급 registry reference 로 치환한다.
-   - 우선 컨펌 단위:
-     - `AoE-style calculation/predicate expansion`
    - 현재 완료된 단계:
      - `AoE-compatible spell schema foundation + sandstorm_particle on_cast 지원`
      - `entity_components runtime`
@@ -388,11 +391,12 @@
      - `damage/support integration foundation`
      - `socket-backed active skill cast path integration`
      - `support semantics expansion`
+     - `AoE-style calculation/predicate expansion`
    - 다음 작업 범위:
-     - `calculation_id` 사용 범위를 더 넓은 action/effect graph 로 확장
-     - predicate 축을 더 데이터 지향적으로 늘리고 runtime gating surface 를 보강
-     - support/selected cast path 와 새 calculation/predicate semantics 연결
-     - 확장된 calculation/predicate semantics 를 GameTest 로 검증
+     - hit 외 effect 타입을 typed graph 위에 추가
+     - ailment/buff/debuff/DOT application seam 을 datapack authoring surface 로 연결
+     - support/selected cast path 와 새 effect semantics 연결
+     - 확장된 effect semantics 를 GameTest 로 검증
    - 후속 구현 순서:
       - hit 외 effect 타입 확장
    - 완료 기준:
@@ -419,8 +423,9 @@
 ## Next Focus
 
 - 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
-- 현재 진행 중인 승인 단위는 `AoE-style calculation/predicate expansion` 입니다.
-- 이번 단위는 `calculation_id` 와 predicate 축을 AoE 지향의 typed expression layer 로 넓히고, 현재 action graph 전반을 typed schema 로 마이그레이션하는 작업입니다.
+- 방금 완료된 승인 단위는 `AoE-style calculation/predicate expansion` 입니다.
+- 이번 완료 단위로 `calculation_id`, `skill_value`, route/selector/action predicate 가 AoE 지향 typed expression layer 로 연결되었습니다.
+- 현재 다음 승인 단위는 `hit 외 effect 타입 확장` 입니다.
 - support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
 - selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
 - 그 다음 핵심 작업은 `Ailment system` 입니다.

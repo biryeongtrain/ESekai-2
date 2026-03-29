@@ -26,6 +26,18 @@ public interface PreparedSkillAction {
     }
 
     /**
+     * Calculation id carried by damage-capable prepared actions.
+     *
+     * <p>Non-damage actions return an empty reference for compatibility with
+     * existing assertions that inspect prepared action payloads generically.</p>
+     *
+     * @return calculation id or an empty reference
+     */
+    default String calculationId() {
+        return "";
+    }
+
+    /**
      * Returns whether the action is currently allowed by its action-local predicates.
      *
      * @param context current skill execution snapshot

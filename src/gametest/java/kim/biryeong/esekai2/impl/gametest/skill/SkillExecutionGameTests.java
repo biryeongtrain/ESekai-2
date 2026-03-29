@@ -261,8 +261,12 @@ public final class SkillExecutionGameTests {
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.25)
         );
 
-        List<String> onHitTypes = prepared.executeOnHit("basic_strike_component").stream().map(PreparedSkillAction::actionType).toList();
-        List<String> onExpireTypes = prepared.executeOnEntityExpire("basic_strike_component").stream().map(PreparedSkillAction::actionType).toList();
+        List<String> onHitTypes = prepared.executeOnHit("basic_strike_component").stream()
+                .map(action -> ((PreparedSkillAction) action).actionType())
+                .toList();
+        List<String> onExpireTypes = prepared.executeOnEntityExpire("basic_strike_component").stream()
+                .map(action -> ((PreparedSkillAction) action).actionType())
+                .toList();
 
         helper.assertTrue(onHitTypes.contains("summon_at_sight"), "On-hit execution should resolve summon_at_sight");
         helper.assertTrue(onExpireTypes.contains("summon_block"), "On-expire execution should resolve summon_block");
@@ -298,7 +302,7 @@ public final class SkillExecutionGameTests {
 
         PreparedDamageAction damageAction = prepared.executeOnHit("default_entity_name").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Fireball should expose a damage action"));
 
@@ -361,7 +365,7 @@ public final class SkillExecutionGameTests {
 
         PreparedDamageAction damageAction = prepared.executeOnHit("missing_registry_component").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Synthetic test skill should expose a damage action"));
 
@@ -395,7 +399,7 @@ public final class SkillExecutionGameTests {
 
         PreparedDamageAction damageAction = prepared.executeOnHit("registry_component").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Registry-backed test skill should expose a damage action"));
 
@@ -442,7 +446,7 @@ public final class SkillExecutionGameTests {
 
         PreparedDamageAction damageAction = prepared.executeOnHit("missing_registry_component").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Fallback test skill should expose a damage action"));
 
@@ -568,7 +572,7 @@ public final class SkillExecutionGameTests {
 
         PreparedDamageAction damageAction = prepared.executeOnHit("default_entity_name").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Fireball should expose a damage action"));
 

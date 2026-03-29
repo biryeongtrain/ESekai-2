@@ -195,13 +195,14 @@ public final class SkillSupportGameTests {
 
         PreparedDamageAction baseDamage = basePrepared.executeOnHit("default_entity_name").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
-                .map(PreparedDamageAction.class::cast)
+                .map(action -> (PreparedDamageAction) action)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Base fireball should expose a damage action"));
-        List<PreparedSkillAction> supportedDamageActions = supportedPrepared.executeOnHit("default_entity_name").stream()
+        List<PreparedDamageAction> supportedDamageActions = supportedPrepared.executeOnHit("default_entity_name").stream()
                 .filter(action -> action instanceof PreparedDamageAction)
+                .map(action -> (PreparedDamageAction) action)
                 .toList();
-        PreparedDamageAction overriddenDamage = (PreparedDamageAction) supportedDamageActions.getFirst();
+        PreparedDamageAction overriddenDamage = supportedDamageActions.getFirst();
 
         helper.assertValueEqual(baseDamage.hitDamageCalculation().baseDamage().amount(DamageType.FIRE), 18.0, "Base damage test skill should resolve fireball_primary_hit baseline damage");
         helper.assertValueEqual(overriddenDamage.hitDamageCalculation().baseDamage().amount(DamageType.FIRE), 24.0, "Overridden damage test skill should use the fixture override value");
