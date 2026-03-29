@@ -1,6 +1,8 @@
 package kim.biryeong.esekai2.impl.gametest.skill;
 
 import com.mojang.serialization.JsonOps;
+import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
+import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationLookup;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillRegistries;
 import kim.biryeong.esekai2.api.skill.tag.SkillTag;
@@ -16,6 +18,7 @@ import kim.biryeong.esekai2.api.skill.stat.SkillStats;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
+import kim.biryeong.esekai2.impl.skill.registry.SkillCalculationRegistryAccess;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.Registry;
@@ -92,7 +95,7 @@ public final class SkillTagGameTests {
     public void matchingConditionalModifiersAffectRuntimeSkillValues(GameTestHelper helper) {
         PreparedSkillUse prepared = Skills.prepareUse(
                 skill(helper),
-                new SkillUseContext(statHolder(helper), statHolder(helper), List.of(
+                skillUseContext(helper, statHolder(helper), statHolder(helper), List.of(
                         new ConditionalStatModifier(
                                 new StatModifier(SkillStats.SKILL_RESOURCE_COST, StatModifierOperation.ADD, 7.0, testId("conditional_cost_bonus")),
                                 new SkillTagCondition(Set.of(SkillTag.SPELL), Set.of())
@@ -111,7 +114,7 @@ public final class SkillTagGameTests {
     public void excludedSkillTagsBlockConditionalRuntimeModifiers(GameTestHelper helper) {
         PreparedSkillUse prepared = Skills.prepareUse(
                 skill(helper),
-                new SkillUseContext(statHolder(helper), statHolder(helper), List.of(
+                skillUseContext(helper, statHolder(helper), statHolder(helper), List.of(
                         new ConditionalStatModifier(
                                 new StatModifier(SkillStats.SKILL_RESOURCE_COST, StatModifierOperation.ADD, 7.0, testId("conditional_cost_blocked")),
                                 new SkillTagCondition(Set.of(SkillTag.SPELL), Set.of(SkillTag.PROJECTILE))
@@ -149,8 +152,30 @@ public final class SkillTagGameTests {
         return helper.getLevel().getServer().registryAccess().lookupOrThrow(StatRegistries.STAT);
     }
 
+    private static Registry<SkillCalculationDefinition> skillCalculationRegistry(GameTestHelper helper) {
+        return SkillCalculationRegistryAccess.skillCalculationRegistry(helper);
+    }
+
     private static StatHolder statHolder(GameTestHelper helper) {
         return StatHolders.create(StatRegistryAccess.statRegistry(helper));
+    }
+
+    private static SkillUseContext skillUseContext(
+            GameTestHelper helper,
+            StatHolder attacker,
+            StatHolder defender,
+            List<ConditionalStatModifier> modifiers,
+            double hitRoll,
+            double criticalStrikeRoll
+    ) {
+        return new SkillUseContext(
+                attacker,
+                defender,
+                modifiers,
+                hitRoll,
+                criticalStrikeRoll,
+                SkillCalculationLookup.fromRegistry(skillCalculationRegistry(helper))
+        );
     }
 
     private static Identifier testId(String path) {

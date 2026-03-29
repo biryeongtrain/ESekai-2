@@ -5,6 +5,7 @@
 ## Working Rules Snapshot
 
 - 모든 구현은 최소 기능 단위로 계획을 세우고 사용자 컨펌을 받은 뒤 진행합니다.
+- 매 작업은 시작 전후로 이 문서를 갱신해 현재 구현 상태, 다음 작업, 검증 기준이 최신 상태를 유지하도록 합니다.
 - 게임 콘텐츠 데이터는 datapack 으로 관리합니다.
 - 서버 운영 옵션, 디버그 옵션, 콘텐츠가 아닌 설정성 데이터는 config 로 관리합니다.
 - 테스트는 Fabric GameTest 를 최우선으로 사용합니다.
@@ -25,15 +26,12 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 24개입니다.
+- 완료된 기반 작업은 현재 30개입니다.
 - 현재 활성 백로그는 2개입니다.
   - `Full data-driven skill system`
   - `Ailment system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 마지막 안정 기준에서는 required Fabric GameTest 144개가 전부 통과했습니다.
-- 최신 재실행 기준인 `./gradlew --console=plain runGameTest` 에서는 총 157개 GameTest 중 required GameTest 1건이 실패했습니다.
-  - `esekai-gametest:skill_execution_game_tests_fireball_runtime_projectile_hits_target_and_restores_expire_block`
-  - 실패 메시지: `Projectile hit should damage the zombie target on tick 10`
+- 최신 안정 기준에서는 총 165개 GameTest 중 required Fabric GameTest 165개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -49,6 +47,11 @@
   - Trinkets seam 은 준비되어 있지만 실제 장착 주입은 아직 연결되지 않았습니다.
 - 스킬 시스템
   - skill tag foundation 과 minimum runtime foundation 이 구현되어 있습니다.
+  - `on_spell_cast`, `en_preds`, optional `calculation_id` reference surface 가 runtime 과 schema 양쪽에 연결되어 있습니다.
+  - `calculation_id` 는 이제 datapack-backed skill calculation registry lookup 으로 실제 hit payload 를 해석할 수 있습니다.
+  - socket-backed active/support foundation 이 도입되어 `skill_support` datapack registry, item socket state, linked support merge seam 이 준비되어 있습니다.
+  - player-selected active skill state 와 equipped socket item cast resolver 가 추가되어 `main hand/off hand/armor` 기준 selected cast prepare/execute 경로가 서버 API 로 연결되어 있습니다.
+  - support semantics 가 확장되어 `appended_rules`, socket index precedence, 최소 predicate/condition tie-in 이 selected cast path 위에서 동작합니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
 - 몬스터 시스템
   - monster stat baseline, monster level scaling, rarity 기반 item level derivation 이 구현되어 있습니다.
@@ -183,14 +186,40 @@
    - `acts` 는 AoE 식 action union 을 따르되 ESekai 에서는 `sandstorm_particle` action 을 추가하고, 이 action 은 `particle_id: Identifier` 만 받아 실제 effect 정의와 실행은 Sandstorm 에 맡깁니다.
    - Sandstorm particle 정의는 ESekai skill datapack 이 아니라 Sandstorm 측 resource/config 로 관리하고, ESekai 는 참조와 실행 타이밍만 책임지는 경계를 유지합니다.
 
+25. Skill execution semantics
+   - `on_spell_cast` runtime event 가 cast 경로에 연결되어 component route 도 cast 시점에 실행될 수 있습니다.
+   - `en_preds` 는 prepared route 에 유지되고, 현재 `ALWAYS`, `HAS_TARGET`, `RANDOM_CHANCE` 가 runtime execution gating 으로 평가됩니다.
+   - `SkillExecutionGameTests` 는 cast-time component route 실행, target 존재 조건, random chance gating 을 검증합니다.
+
+26. Skill calculation reference surface
+   - `SkillAction` 은 optional `calculation_id` 를 지원하고, 기존 datapack 은 빈 문자열 기본값으로 계속 decode 됩니다.
+   - `PreparedDamageAction` 은 `calculation_id` 를 보존하여 이후 calculation registry 또는 schema layer 가 재파싱 없이 참조를 사용할 수 있습니다.
+   - sample `fireball` fixture 와 GameTest 가 codec round-trip, default fallback, prepared action propagation 을 검증합니다.
+
+27. Skill calculation registry
+   - `esekai2:skill_calculation` dynamic registry 와 `SkillCalculationDefinition` 공개 API 가 구현되어 있습니다.
+   - `SkillUseContext` 는 optional calculation lookup seam 을 가지며, skill preparation 시 `calculation_id` reference 를 datapack calculation payload 로 해석할 수 있습니다.
+   - sample `fireball` skill 은 이제 datapack calculation fixture 를 통해 base damage 와 crit metadata 를 불러오고, GameTest 는 registry load, registry-backed payload resolution, missing lookup warning + inline fallback 을 검증합니다.
+
+28. Socket-backed support foundation
+   - `esekai2:skill_support` dynamic registry 와 `SkillSupportDefinition`, `SkillSupportEffect`, `SkillActionOverride` 공개 API 가 구현되어 있습니다.
+   - `SocketedSkillItemState`, `SocketedSkillRef`, `SocketLinkGroup`, `SocketedSkills` 가 item socket/link foundation 으로 추가되어 active skill 과 linked supports 를 `ItemStack` 에 저장/조회할 수 있습니다.
+   - `Skills.prepareUse(ItemStack, Registry<SkillDefinition>, Registry<SkillSupportDefinition>, SkillUseContext)` 는 item state 에서 active skill 과 linked supports 를 해석해 prepare pipeline 에 연결하고, support effect 는 현재 `added_tags`, `added_conditional_stat_modifiers`, action parameter override, appended action 범위까지 merge 됩니다.
+
+29. Socket-backed active skill cast path integration
+   - `SelectedActiveSkillRef`, `PlayerActiveSkills`, `PlayerActiveSkillSavedData` 가 추가되어 서버가 플레이어별 selected active skill 을 `SavedData` 로 유지합니다.
+   - `SocketedEquipmentSlot` 과 selected cast resolver 가 추가되어 `main hand`, `off hand`, `head`, `chest`, `legs`, `feet` 장착 부위에서 socketed active skill 과 linked supports 를 읽어 준비할 수 있습니다.
+   - `Skills.prepareSelectedUse(...)` 와 `Skills.castSelectedSkill(...)` 는 invalid selection 을 예외 대신 `success/failure + warnings` 결과 타입으로 반환하고, missing linked support 는 warning 후 무시하며, selected cast 를 기존 `executeOnCast` server runtime 으로 연결합니다.
+
+30. Support semantics expansion
+   - `SkillSupportEffect` 는 이제 `appended_rules` 를 지원하고, appended rule target 은 `on_cast` 와 명시적 `entity_component` bucket 을 가리킬 수 있습니다.
+   - linked support merge 순서는 같은 link group 내 `socketIndex` 오름차순으로 고정되며, 같은 action override 충돌 시 더 높은 socket index 가 최종값을 덮어씁니다.
+   - support appended rule 은 기존 `SkillRule` 을 그대로 사용해 `ifs` 와 `en_preds` 를 포함할 수 있고, unknown entity component target 은 preparation warning 으로 안전하게 무시됩니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 마지막 안정 기준에서는 required Fabric GameTest 144개 전부 통과입니다.
-- 최신 재실행 기준인 `./gradlew --console=plain runGameTest` 에서는 required GameTest 1건이 실패했습니다.
-- 현재 관찰된 실패 테스트는 아래와 같습니다.
-  - `esekai-gametest:skill_execution_game_tests_fireball_runtime_projectile_hits_target_and_restores_expire_block`
-  - `Projectile hit should damage the zombie target on tick 10`
+- 최신 안정 기준에서는 required Fabric GameTest 165개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -351,22 +380,25 @@
      - `sandstorm_particle` action 은 `particle_id` 만 받고, 실제 파티클 authoring 은 Sandstorm 쪽에 둔다.
      - AoE 의 `value_calculation` 류 참조는 ESekai 쪽 `calculation_id` 또는 동급 registry reference 로 치환한다.
    - 우선 컨펌 단위:
+     - `AoE-style calculation/predicate expansion`
+   - 현재 완료된 단계:
      - `AoE-compatible spell schema foundation + sandstorm_particle on_cast 지원`
-   - 1차 작업 범위:
-     - `SkillDefinition` 을 `config + attached` 중심 구조로 재편
-     - `SkillAction`, `SkillCondition`, `SkillTargetSelector` 공개 API 추가
-     - `attached.on_cast` rule 해석기 추가
-     - 기존 `basic_strike`, `fireball` 을 새 schema 로 마이그레이션
-     - `sandstorm_particle` action 을 `on_cast` 경로에 연결
+     - `entity_components runtime`
+     - `projectile or summon entity event routing`
+     - `damage/support integration foundation`
+     - `socket-backed active skill cast path integration`
+     - `support semantics expansion`
+   - 다음 작업 범위:
+     - `calculation_id` 사용 범위를 더 넓은 action/effect graph 로 확장
+     - predicate 축을 더 데이터 지향적으로 늘리고 runtime gating surface 를 보강
+     - support/selected cast path 와 새 calculation/predicate semantics 연결
+     - 확장된 calculation/predicate semantics 를 GameTest 로 검증
    - 후속 구현 순서:
-     - `entity_components` runtime
-     - projectile or summon entity event routing
-     - `damage/support` integration
-     - AoE 식 calculation reference 와 predicate 축 확장
+      - hit 외 effect 타입 확장
    - 완료 기준:
-     - 신규 스킬 1종을 코드 수정 없이 datapack 만으로 추가 가능
-     - 기존 sample skill 이 data-driven execution 경로로 동작
-     - GameTest 로 datapack-defined skill 실행 검증
+     - calculation reference 와 predicate 축이 현재 damage/on-cast 중심 경계를 넘어 더 넓은 graph/runtime 경로에 연결됨
+     - datapack author 가 더 많은 runtime gating/calculation 재사용을 코드 수정 없이 할 수 있음
+     - GameTest 로 확장된 calculation/predicate semantics 가 selected cast path 와 함께 검증됨
 
 2. Ailment system
    - 목적: PoE 감성의 주요 상태이상 계산 축을 도입한다.
@@ -387,6 +419,10 @@
 ## Next Focus
 
 - 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
+- 현재 진행 중인 승인 단위는 `AoE-style calculation/predicate expansion` 입니다.
+- 이번 단위는 `calculation_id` 와 predicate 축을 AoE 지향의 typed expression layer 로 넓히고, 현재 action graph 전반을 typed schema 로 마이그레이션하는 작업입니다.
+- support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
+- selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
 - 그 다음 핵심 작업은 `Ailment system` 입니다.
 - 선행 기반은 준비되어 있습니다.
   - `Item affix foundation`
@@ -399,6 +435,7 @@
   - `Monster level scaling and item level`
   - `Monster stat baseline`
   - `Monster affix integration`
+  - `Socket-backed support foundation`
 
 ## PoE Parity Candidates
 
@@ -446,9 +483,9 @@
 
 이유는 다음과 같습니다.
 
-- monster 쪽 baseline, level scaling, affix integration 이 준비되었으므로, 이제 남은 큰 병목은 current minimum skill runtime 을 fully data-driven schema 로 끌어올리는 단계입니다.
-- 그 다음 단계에서 ailment system 을 붙이면 skill content 와 상태이상 부여를 datapack 실행 그래프에 자연스럽게 연결할 수 있습니다.
-- skill, item, monster, damage 기반은 이미 준비되어 있어 다음은 skill schema 전환에 집중하는 것이 맞습니다.
+- schema, runtime graph, calculation reference, socket-backed support foundation 까지는 준비되었고, 아직 실제 active skill cast 흐름과 socket item 이 직접 연결되지는 않았습니다.
+- 이 경로를 먼저 닫아야 support 기반 콘텐츠와 이후 ailment/effect 확장이 실제 플레이 경로에 바로 붙습니다.
+- skill, item, monster, damage 기반은 이미 준비되어 있어 다음은 socket-backed cast path 를 닫는 것이 맞습니다.
 
 즉, 지금 기준 병목은 `Full data-driven skill system` 입니다.
 
@@ -459,9 +496,9 @@
 
 이 순서를 잡은 이유는 다음과 같습니다.
 
-- full data-driven skill system 을 올리면 현재 minimum skill runtime 을 콘텐츠 제작 가능한 datapack 시스템으로 바꿀 수 있습니다.
-- ailment system 은 data-driven skill execution 축이 정리된 뒤 연결하는 편이 후속 schema 확장이 덜 꼬입니다.
-- skill foundation 과 monster/item/combat 기반은 준비되어 있어, 다음은 skill schema 전환에 집중하면 됩니다.
+- socket-backed cast path 를 닫으면 현재 support foundation 이 실제 런타임 사용 경로를 갖게 됩니다.
+- ailment system 은 data-driven skill execution 과 active skill 사용 경로가 정리된 뒤 연결하는 편이 후속 schema 확장이 덜 꼬입니다.
+- skill foundation 과 monster/item/combat 기반은 준비되어 있어, 다음은 skill runtime 사용 경로를 실제 아이템 상태와 이어 붙이는 것이 맞습니다.
 
 ## Update Rule
 
@@ -471,3 +508,4 @@
 - 다음에 해야 할 최소 단위만 `Ordered Backlog` 에 남깁니다.
 - 구현 순서가 바뀌면 이유를 같이 적습니다.
 - 새 공개 API 가 추가되면 테스트 기준도 함께 갱신합니다.
+- 각 작업을 시작하거나 마칠 때 현재 작업 내용, 검증 상태, 다음 최소 작업을 이 문서에 바로 반영합니다.

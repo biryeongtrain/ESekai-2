@@ -5,11 +5,13 @@ import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitContext;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
+import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillCondition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillConditionType;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
@@ -24,6 +26,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedSummonBlockAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedTickAction;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionEvent;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
+import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
@@ -43,26 +46,32 @@ public final class SkillHitPreparationCalculator {
         Objects.requireNonNull(skill, "skill");
         Objects.requireNonNull(context, "context");
 
-        double resourceCost = SkillRuntimeResolver.resolveResourceCost(skill, context);
-        int useTimeTicks = SkillRuntimeResolver.resolveUseTimeTicks(skill, context);
-        int cooldownTicks = SkillRuntimeResolver.resolveCooldownTicks(skill, context);
-        List<String> warnings = new ArrayList<>();
+        SkillSupportMerger.SupportMergeResult mergeResult = SkillSupportMerger.merge(skill, context);
+        SkillDefinition mergedSkill = mergeResult.skill();
+        SkillUseContext mergedContext = context.withAdditionalConditionalModifiers(mergeResult.additionalConditionalModifiers());
+
+        double resourceCost = SkillRuntimeResolver.resolveResourceCost(mergedSkill, mergedContext);
+        int useTimeTicks = SkillRuntimeResolver.resolveUseTimeTicks(mergedSkill, mergedContext);
+        int cooldownTicks = SkillRuntimeResolver.resolveCooldownTicks(mergedSkill, mergedContext);
+        List<String> warnings = new ArrayList<>(mergeResult.warnings());
 
         List<PreparedSkillExecutionRoute> onCastRoutes = parseRoutesFromRules(
-                skill.attached().onCast(),
+                mergedSkill.attached().onCast(),
                 SkillExecutionEvent.ON_CAST,
-                context,
+                mergedContext,
                 warnings
         );
-        Map<String, PreparedSkillEntityComponent> components = parseComponents(skill.attached().entityComponents(), context, warnings);
+        ParsedComponents parsedComponents = parseComponents(mergedSkill.attached().entityComponents(), mergedContext, warnings);
 
         return new PreparedSkillUse(
-                skill,
+                mergedSkill,
+                mergedContext,
                 resourceCost,
                 useTimeTicks,
                 cooldownTicks,
                 onCastRoutes,
-                components,
+                parsedComponents.onSpellCastRoutes(),
+                parsedComponents.components(),
                 warnings
         );
     }
@@ -79,27 +88,29 @@ public final class SkillHitPreparationCalculator {
             if (actions.isEmpty()) {
                 continue;
             }
-            routes.add(new PreparedSkillExecutionRoute(event, rule.targets(), actions, 0));
+            routes.add(new PreparedSkillExecutionRoute(event, rule.targets(), actions, rule.enPreds(), 0));
         }
         return List.copyOf(routes);
     }
 
-    private static Map<String, PreparedSkillEntityComponent> parseComponents(
+    private static ParsedComponents parseComponents(
             Map<String, List<SkillRule>> entityComponents,
             SkillUseContext context,
             List<String> warnings
     ) {
         Map<String, PreparedSkillEntityComponent> parsed = new LinkedHashMap<>();
+        List<PreparedSkillExecutionRoute> spellCastRoutes = new ArrayList<>();
         for (Map.Entry<String, List<SkillRule>> componentEntry : entityComponents.entrySet()) {
             String componentId = componentEntry.getKey();
+            List<PreparedSkillExecutionRoute> onSpellCastRoutes = new ArrayList<>();
             List<PreparedSkillExecutionRoute> onHitRoutes = new ArrayList<>();
             List<PreparedSkillExecutionRoute> onExpireRoutes = new ArrayList<>();
             List<PreparedSkillExecutionRoute> tickRoutes = new ArrayList<>();
 
-            for (SkillRule rule : componentEntry.getValue()) {
-                List<SkillExecutionEvent> events = resolveRuleEvents(rule);
-                List<PreparedSkillAction> actions = parseActionList(rule.acts(), context, warnings);
-                int tickInterval = resolveTickInterval(rule.ifs());
+        for (SkillRule rule : componentEntry.getValue()) {
+            List<SkillExecutionEvent> events = resolveRuleEvents(rule);
+            List<PreparedSkillAction> actions = parseActionList(rule.acts(), context, warnings);
+            int tickInterval = resolveTickInterval(rule.ifs(), context);
 
                 if (actions.isEmpty()) {
                     continue;
@@ -110,9 +121,14 @@ public final class SkillHitPreparationCalculator {
                             event,
                             rule.targets(),
                             actions,
+                            rule.enPreds(),
                             event == SkillExecutionEvent.ON_TICK_CONDITION ? Math.max(1, tickInterval) : 0
                     );
                     switch (event) {
+                        case ON_SPELL_CAST -> {
+                            onSpellCastRoutes.add(route);
+                            spellCastRoutes.add(route);
+                        }
                         case ON_HIT -> onHitRoutes.add(route);
                         case ON_ENTITY_EXPIRE -> onExpireRoutes.add(route);
                         case ON_TICK_CONDITION -> tickRoutes.add(route);
@@ -124,11 +140,11 @@ public final class SkillHitPreparationCalculator {
 
             parsed.put(
                     componentId,
-                    new PreparedSkillEntityComponent(componentId, onHitRoutes, onExpireRoutes, tickRoutes)
+                    new PreparedSkillEntityComponent(componentId, onSpellCastRoutes, onHitRoutes, onExpireRoutes, tickRoutes)
             );
         }
 
-        return Map.copyOf(parsed);
+        return new ParsedComponents(Map.copyOf(parsed), List.copyOf(spellCastRoutes));
     }
 
     private static List<SkillExecutionEvent> resolveRuleEvents(SkillRule rule) {
@@ -139,6 +155,9 @@ public final class SkillHitPreparationCalculator {
         }
 
         for (SkillCondition condition : rule.ifs()) {
+            if (condition.type() == SkillConditionType.ON_SPELL_CAST) {
+                events.add(SkillExecutionEvent.ON_SPELL_CAST);
+            } else
             if (condition.type() == SkillConditionType.ON_HIT) {
                 events.add(SkillExecutionEvent.ON_HIT);
             } else if (condition.type() == SkillConditionType.ON_ENTITY_EXPIRE) {
@@ -156,19 +175,20 @@ public final class SkillHitPreparationCalculator {
     }
 
     private static int resolveTickInterval(List<SkillCondition> conditions) {
+        return resolveTickInterval(conditions, null);
+    }
+
+    private static int resolveTickInterval(List<SkillCondition> conditions, SkillUseContext context) {
         for (SkillCondition condition : conditions) {
             if (condition.type() != SkillConditionType.X_TICKS_CONDITION) {
                 continue;
             }
 
-            String ticksRaw = readString(condition.parameters().get("x_ticks"));
-            if (ticksRaw == null) {
-                ticksRaw = readString(condition.parameters().get("ticks"));
+            if (context == null) {
+                continue;
             }
-            if (ticksRaw == null) {
-                ticksRaw = readString(condition.parameters().get("tick_rate"));
-            }
-            int ticks = readInt(ticksRaw, -1);
+
+            int ticks = (int) Math.round(condition.interval().resolve(context));
             if (ticks > 0) {
                 return ticks;
             }
@@ -193,38 +213,59 @@ public final class SkillHitPreparationCalculator {
 
     private static PreparedSkillAction parseAction(SkillAction action, SkillUseContext context, List<String> warnings) {
         SkillActionType type = action.type();
-        Map<String, String> parameters = action.parameters();
 
         return switch (type) {
-            case SOUND -> parseSound(parameters, warnings);
-            case DAMAGE -> parseDamage(parameters, context, warnings);
-            case PROJECTILE -> parseProjectile(parameters, warnings);
-            case SUMMON_AT_SIGHT -> parseSummonAtSight(parameters, warnings);
-            case SUMMON_BLOCK -> parseSummonBlock(parameters, warnings);
-            case SANDSTORM_PARTICLE -> parseSandstormParticle(parameters, warnings);
+            case SOUND -> parseSound(action, context, warnings);
+            case DAMAGE -> parseDamage(action, context, warnings);
+            case PROJECTILE -> parseProjectile(action, context, warnings);
+            case SUMMON_AT_SIGHT -> parseSummonAtSight(action, context, warnings);
+            case SUMMON_BLOCK -> parseSummonBlock(action, context, warnings);
+            case SANDSTORM_PARTICLE -> parseSandstormParticle(action, context, warnings);
         };
     }
 
-    private static PreparedSoundAction parseSound(Map<String, String> parameters, List<String> warnings) {
-        Identifier soundId = parseIdentifier(parameters, "sound", "id", "identifier");
+    private static PreparedSoundAction parseSound(SkillAction action, SkillUseContext context, List<String> warnings) {
+        Identifier soundId = parseIdentifier(action.soundId());
         if (soundId == null) {
             warnings.add("sound action requires a valid identifier");
             return null;
         }
-        float volume = readFloat(parameters.get("volume"), 1.0f);
-        float pitch = readFloat(parameters.get("pitch"), 1.0f);
-        return new PreparedSoundAction(soundId, volume, pitch);
+        float volume = (float) resolveValue(action.volume(), context, 1.0);
+        float pitch = (float) resolveValue(action.pitch(), context, 1.0);
+        return new PreparedSoundAction(soundId, volume, pitch, action.enPreds());
     }
 
     private static PreparedDamageAction parseDamage(
-            Map<String, String> parameters,
+            SkillAction action,
             SkillUseContext context,
             List<String> warnings
     ) {
-        HitKind hitKind = parseHitKind(readString(parameters.get("hit_kind")));
-        DamageBreakdown baseDamage = parseBaseDamage(parameters, warnings);
-        double baseCriticalStrikeChance = readPercent(parameters.get("base_critical_strike_chance"));
-        double baseCriticalStrikeMultiplier = readMultiplier(parameters.get("base_critical_strike_multiplier"));
+        String calculationId = action.calculationId();
+        SkillCalculationDefinition calculationDefinition = resolveCalculationDefinition(calculationId, context, warnings);
+        HitKind hitKind = action.hitKind();
+        if (calculationDefinition != null && hitKind == HitKind.ATTACK) {
+            hitKind = calculationDefinition.hitKind();
+        }
+
+        DamageBreakdown baseDamage = calculationDefinition != null
+                ? calculationDefinition.resolveBaseDamage(context)
+                : DamageBreakdown.empty();
+        baseDamage = mergeInlineBaseDamage(baseDamage, action.baseDamage(), context);
+
+        double baseCriticalStrikeChance = calculationDefinition != null
+                ? calculationDefinition.resolveBaseCriticalStrikeChance(context)
+                : 0.0;
+        if (calculationDefinition == null || shouldOverride(action.baseCriticalStrikeChance(), 0.0)) {
+            baseCriticalStrikeChance = clampPercent(action.baseCriticalStrikeChance().resolve(context));
+        }
+
+        double baseCriticalStrikeMultiplier = calculationDefinition != null
+                ? calculationDefinition.resolveBaseCriticalStrikeMultiplier(context)
+                : 100.0;
+        if (calculationDefinition == null || shouldOverride(action.baseCriticalStrikeMultiplier(), 100.0)) {
+            baseCriticalStrikeMultiplier = clampMultiplier(action.baseCriticalStrikeMultiplier().resolve(context));
+        }
+
         return new PreparedDamageAction(new HitDamageCalculation(
                 baseDamage,
                 List.of(),
@@ -241,159 +282,100 @@ public final class SkillHitPreparationCalculator {
                         baseCriticalStrikeMultiplier
                 ),
                 context.defenderStats()
-        ));
+        ), calculationId, action.enPreds());
     }
 
-    private static PreparedProjectileAction parseProjectile(Map<String, String> parameters, List<String> warnings) {
-        String componentId = readString(parameters.get("entity_name"));
-        Identifier projectileEntityId = parseIdentifier(parameters, "proj_en", "projectile", "id", "identifier", "path");
+    private static SkillCalculationDefinition resolveCalculationDefinition(
+            String calculationId,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        if (calculationId == null || calculationId.isBlank()) {
+            return null;
+        }
+
+        Identifier id = Identifier.tryParse(calculationId);
+        if (id == null) {
+            warnings.add("damage action calculation_id must be a valid identifier: " + calculationId);
+            return null;
+        }
+
+        return context.calculationLookup().resolve(id).orElseGet(() -> {
+            warnings.add("Unknown skill calculation: " + calculationId);
+            return null;
+        });
+    }
+
+    private static PreparedProjectileAction parseProjectile(SkillAction action, SkillUseContext context, List<String> warnings) {
+        String componentId = readString(action.componentId());
+        Identifier projectileEntityId = parseIdentifier(action.entityId());
         if (componentId == null || projectileEntityId == null) {
             warnings.add("projectile action requires entity_name and proj_en");
             return null;
         }
-        int lifeTicks = readInt(parameters.get("life_ticks"), 0);
-        boolean gravity = Boolean.parseBoolean(parameters.getOrDefault("gravity", "false"));
-        return new PreparedProjectileAction(componentId, projectileEntityId.toString(), lifeTicks, gravity);
+        int lifeTicks = resolveInt(action.lifeTicks(), context, 0);
+        boolean gravity = action.gravity();
+        return new PreparedProjectileAction(componentId, projectileEntityId.toString(), lifeTicks, gravity, action.enPreds());
     }
 
-    private static PreparedSummonAtSightAction parseSummonAtSight(Map<String, String> parameters, List<String> warnings) {
-        String componentId = readString(parameters.get("entity_name"));
-        Identifier summonEntityId = parseIdentifier(parameters, "proj_en", "summon_at_sight", "summon", "id", "identifier");
+    private static PreparedSummonAtSightAction parseSummonAtSight(SkillAction action, SkillUseContext context, List<String> warnings) {
+        String componentId = readString(action.componentId());
+        Identifier summonEntityId = parseIdentifier(action.entityId());
         if (componentId == null || summonEntityId == null) {
             warnings.add("summon_at_sight action requires entity_name and proj_en");
             return null;
         }
-        int lifeTicks = readInt(parameters.get("life_ticks"), 0);
-        boolean gravity = Boolean.parseBoolean(parameters.getOrDefault("gravity", "false"));
-        return new PreparedSummonAtSightAction(componentId, summonEntityId.toString(), lifeTicks, gravity);
+        int lifeTicks = resolveInt(action.lifeTicks(), context, 0);
+        boolean gravity = action.gravity();
+        return new PreparedSummonAtSightAction(componentId, summonEntityId.toString(), lifeTicks, gravity, action.enPreds());
     }
 
-    private static PreparedSummonBlockAction parseSummonBlock(Map<String, String> parameters, List<String> warnings) {
-        String componentId = readString(parameters.get("entity_name"));
-        String blockId = readString(parameters.get("block"));
+    private static PreparedSummonBlockAction parseSummonBlock(SkillAction action, SkillUseContext context, List<String> warnings) {
+        String componentId = readString(action.componentId());
+        String blockId = readString(action.blockId());
         if (componentId == null || blockId == null) {
             warnings.add("summon_block action requires entity_name and block");
             return null;
         }
-        int lifeTicks = readInt(parameters.get("life_ticks"), 0);
-        return new PreparedSummonBlockAction(componentId, blockId, lifeTicks);
+        int lifeTicks = resolveInt(action.lifeTicks(), context, 0);
+        return new PreparedSummonBlockAction(componentId, blockId, lifeTicks, action.enPreds());
     }
 
     private static PreparedSandstormParticleAction parseSandstormParticle(
-            Map<String, String> parameters,
+            SkillAction action,
+            SkillUseContext context,
             List<String> warnings
     ) {
-        Identifier id = parseIdentifier(parameters, "sandstorm_particle", "particle_id", "id", "identifier");
+        Identifier id = parseIdentifier(action.particleId());
         if (id == null) {
             warnings.add("sandstorm_particle action requires particle_id");
             return null;
         }
-        String anchor = readString(parameters.get("anchor"));
+        String anchor = readString(action.anchor());
         if (anchor == null) {
             anchor = "self";
         }
-        double offsetX = readDouble(parameters.get("offset_x"), 0.0);
-        double offsetY = readDouble(parameters.get("offset_y"), 0.0);
-        double offsetZ = readDouble(parameters.get("offset_z"), 0.0);
-        return new PreparedSandstormParticleAction(id, anchor, offsetX, offsetY, offsetZ);
+        double offsetX = resolveValue(action.offsetX(), context, 0.0);
+        double offsetY = resolveValue(action.offsetY(), context, 0.0);
+        double offsetZ = resolveValue(action.offsetZ(), context, 0.0);
+        return new PreparedSandstormParticleAction(id, anchor, offsetX, offsetY, offsetZ, action.enPreds());
     }
 
-    private static HitKind parseHitKind(String kindRaw) {
-        if (kindRaw == null) {
-            return HitKind.ATTACK;
-        }
-        for (HitKind kind : HitKind.values()) {
-            if (kind.serializedName().equals(kindRaw)) {
-                return kind;
-            }
-        }
-        return HitKind.ATTACK;
-    }
+    private static DamageBreakdown mergeInlineBaseDamage(
+            DamageBreakdown base,
+            Map<DamageType, SkillValueExpression> parameters,
+            SkillUseContext context
+    ) {
+        DamageBreakdown merged = base == null ? DamageBreakdown.empty() : base;
 
-    private static DamageBreakdown parseBaseDamage(Map<String, String> parameters, List<String> warnings) {
-        DamageBreakdown base = DamageBreakdown.empty();
-
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            String key = entry.getKey();
-            if (key.startsWith("base_damage_")) {
-                DamageType type = parseDamageType(key.substring("base_damage_".length()), warnings);
-                if (type != null) {
-                    base = base.with(type, readDouble(entry.getValue(), 0.0));
-                }
+        for (Map.Entry<DamageType, SkillValueExpression> entry : parameters.entrySet()) {
+            double resolved = entry.getValue().resolve(context);
+            if (Double.isFinite(resolved)) {
+                merged = merged.with(entry.getKey(), resolved);
             }
         }
 
-        return base;
-    }
-
-    private static DamageType parseDamageType(String rawType, List<String> warnings) {
-        if (rawType == null || rawType.isBlank()) {
-            return null;
-        }
-
-        for (DamageType damageType : DamageType.values()) {
-            if (damageType.id().equals(rawType)) {
-                return damageType;
-            }
-        }
-        if (warnings != null) {
-            warnings.add("Unknown damage type in skill action payload: " + rawType);
-        }
-        return null;
-    }
-
-    private static double readDouble(String raw, double fallback) {
-        double parsed = readDoubleOrNaN(raw);
-        return Double.isFinite(parsed) ? parsed : fallback;
-    }
-
-    private static double readPercent(String raw) {
-        double value = readDoubleOrNaN(raw);
-        if (!Double.isFinite(value)) {
-            return 0.0;
-        }
-        return Math.max(0.0, Math.min(100.0, value));
-    }
-
-    private static double readMultiplier(String raw) {
-        double value = readDoubleOrNaN(raw);
-        if (!Double.isFinite(value) || value < 100.0) {
-            return 100.0;
-        }
-        return value;
-    }
-
-    private static double readDoubleOrNaN(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Double.NaN;
-        }
-        try {
-            return Double.parseDouble(raw);
-        } catch (NumberFormatException exception) {
-            return Double.NaN;
-        }
-    }
-
-    private static float readFloat(String raw, float fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
-        try {
-            return Float.parseFloat(raw);
-        } catch (NumberFormatException exception) {
-            return fallback;
-        }
-    }
-
-    private static int readInt(String raw, int fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException exception) {
-            return fallback;
-        }
+        return merged;
     }
 
     private static String readString(String raw) {
@@ -403,17 +385,48 @@ public final class SkillHitPreparationCalculator {
         return raw;
     }
 
-    private static Identifier parseIdentifier(Map<String, String> parameters, String...keys) {
-        for (String key : keys) {
-            String raw = readString(parameters.get(key));
-            if (raw == null) {
-                continue;
-            }
-            Identifier parsed = Identifier.tryParse(raw);
-            if (parsed != null) {
-                return parsed;
-            }
+    private static Identifier parseIdentifier(String raw) {
+        String value = readString(raw);
+        if (value == null) {
+            return null;
         }
-        return null;
+        return Identifier.tryParse(value);
+    }
+
+    private static double resolveValue(SkillValueExpression expression, SkillUseContext context, double fallback) {
+        double resolved = expression.resolve(context);
+        return Double.isFinite(resolved) ? resolved : fallback;
+    }
+
+    private static int resolveInt(SkillValueExpression expression, SkillUseContext context, int fallback) {
+        double resolved = expression.resolve(context);
+        if (!Double.isFinite(resolved)) {
+            return fallback;
+        }
+        return (int) Math.round(resolved);
+    }
+
+    private static double clampPercent(double value) {
+        if (!Double.isFinite(value)) {
+            return 0.0;
+        }
+        return Math.max(0.0, Math.min(100.0, value));
+    }
+
+    private static double clampMultiplier(double value) {
+        if (!Double.isFinite(value) || value < 100.0) {
+            return 100.0;
+        }
+        return value;
+    }
+
+    private static boolean shouldOverride(SkillValueExpression expression, double defaultConstant) {
+        return !expression.isConstant() || expression.constant() != defaultConstant;
+    }
+
+    private record ParsedComponents(
+            Map<String, PreparedSkillEntityComponent> components,
+            List<PreparedSkillExecutionRoute> onSpellCastRoutes
+    ) {
     }
 }

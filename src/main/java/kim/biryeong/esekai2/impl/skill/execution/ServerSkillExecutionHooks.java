@@ -111,6 +111,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         }
 
         Vec3 velocity = resolveProjectileVelocity(context, targets);
+        Vec3 spawnPosition = resolveProjectileSpawnPosition(context, velocity);
         SkillProjectileEntity projectile = SkillProjectileEntity.create(
                 context.level(),
                 skillId,
@@ -120,7 +121,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
                 action.gravity(),
                 velocity
         );
-        projectile.setPos(context.origin());
+        projectile.setPos(spawnPosition);
         projectile.setOwnerUuid(context.caster().getUUID());
         if (!context.level().tryAddFreshEntityWithPassengers(projectile)) {
             return Optional.empty();
@@ -287,15 +288,27 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
     }
 
     private static Vec3 resolveProjectileVelocity(SkillExecutionContext context, List<Entity> targets) {
-        Vec3 destination = resolveDefaultPosition(context, targets);
+        Vec3 destination = context.target()
+                .map(target -> target instanceof LivingEntity livingEntity ? livingEntity.getEyePosition() : target.position())
+                .orElseGet(context::impactPosition);
         Vec3 direction = destination.subtract(context.origin());
         if (direction.lengthSqr() <= 1.0e-8) {
-            direction = context.caster().getLookAngle();
+            direction = resolveDefaultPosition(context, targets).subtract(context.origin());
         }
         if (direction.lengthSqr() <= 1.0e-8) {
             direction = new Vec3(0.0, 0.0, 1.0);
         }
         return direction.normalize().scale(DEFAULT_PROJECTILE_SPEED);
+    }
+
+    private static Vec3 resolveProjectileSpawnPosition(SkillExecutionContext context, Vec3 velocity) {
+        Vec3 forward = velocity.lengthSqr() > 1.0e-8 ? velocity.normalize() : context.caster().getLookAngle();
+        if (forward.lengthSqr() <= 1.0e-8) {
+            forward = new Vec3(0.0, 0.0, 1.0);
+        }
+
+        Vec3 base = context.caster().position().add(0.0, context.caster().getBbHeight() * 0.75, 0.0);
+        return base.add(forward.scale(0.5));
     }
 
     private static Vec3 resolveDefaultPosition(SkillExecutionContext context, List<Entity> targets) {

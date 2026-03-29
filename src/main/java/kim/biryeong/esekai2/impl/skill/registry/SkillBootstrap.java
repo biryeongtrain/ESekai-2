@@ -1,7 +1,10 @@
 package kim.biryeong.esekai2.impl.skill.registry;
 
+import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillRegistries;
+import kim.biryeong.esekai2.api.skill.value.SkillValueDefinition;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
 import net.fabricmc.fabric.api.event.registry.DynamicRegistries;
 
 /**
@@ -19,6 +22,9 @@ public final class SkillBootstrap {
         }
 
         DynamicRegistries.register(SkillRegistries.SKILL, SkillDefinition.CODEC);
+        DynamicRegistries.register(SkillRegistries.SKILL_CALCULATION, SkillCalculationDefinition.CODEC);
+        DynamicRegistries.register(SkillRegistries.SKILL_VALUE, SkillValueDefinition.CODEC);
+        DynamicRegistries.register(SkillRegistries.SKILL_SUPPORT, SkillSupportDefinition.CODEC);
         bootstrapped = true;
     }
 }

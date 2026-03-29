@@ -9,23 +9,28 @@ import java.util.Objects;
  */
 public final class PreparedSkillEntityComponent {
     private final String componentId;
+    private final List<PreparedSkillExecutionRoute> onSpellCastRoutes;
     private final List<PreparedSkillExecutionRoute> onHitRoutes;
     private final List<PreparedSkillExecutionRoute> onExpireRoutes;
     private final List<PreparedSkillExecutionRoute> tickRoutes;
+    private final List<PreparedSkillAction> onSpellCastActions;
     private final List<PreparedSkillAction> onHitActions;
     private final List<PreparedSkillAction> onExpireActions;
     private final List<PreparedTickAction> tickActions;
 
     public PreparedSkillEntityComponent(
             String componentId,
+            List<PreparedSkillExecutionRoute> onSpellCastRoutes,
             List<PreparedSkillExecutionRoute> onHitRoutes,
             List<PreparedSkillExecutionRoute> onExpireRoutes,
             List<PreparedSkillExecutionRoute> tickRoutes
     ) {
         this.componentId = Objects.requireNonNull(componentId, "componentId");
+        this.onSpellCastRoutes = List.copyOf(onSpellCastRoutes);
         this.onHitRoutes = List.copyOf(onHitRoutes);
         this.onExpireRoutes = List.copyOf(onExpireRoutes);
         this.tickRoutes = List.copyOf(tickRoutes);
+        this.onSpellCastActions = flattenActions(this.onSpellCastRoutes);
         this.onHitActions = flattenActions(this.onHitRoutes);
         this.onExpireActions = flattenActions(this.onExpireRoutes);
         this.tickActions = flattenTickActions(this.tickRoutes);
@@ -39,6 +44,10 @@ public final class PreparedSkillEntityComponent {
         return onHitRoutes;
     }
 
+    public List<PreparedSkillExecutionRoute> onSpellCastRoutes() {
+        return onSpellCastRoutes;
+    }
+
     public List<PreparedSkillExecutionRoute> onExpireRoutes() {
         return onExpireRoutes;
     }
@@ -49,6 +58,10 @@ public final class PreparedSkillEntityComponent {
 
     public List<PreparedSkillAction> onHitActions() {
         return onHitActions;
+    }
+
+    public List<PreparedSkillAction> onSpellCastActions() {
+        return onSpellCastActions;
     }
 
     public List<PreparedSkillAction> onExpireActions() {

@@ -1,0 +1,18 @@
+{
+  "identifier": "esekai2:support_melee_only",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "melee"
+        ],
+        "excluded_tags": [
+          "projectile"
+        ]
+      },
+      "added_tags": [
+        "attack"
+      ]
+    }
+  ]
+}

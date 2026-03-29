@@ -1,0 +1,8 @@
+{
+  "hit_kind": "spell",
+  "base_damage": {
+    "fire": 6.0
+  },
+  "base_critical_strike_chance": 0.0,
+  "base_critical_strike_multiplier": 100.0
+}

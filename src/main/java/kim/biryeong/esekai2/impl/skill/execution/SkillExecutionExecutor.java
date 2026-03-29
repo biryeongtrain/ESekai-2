@@ -23,7 +23,13 @@ public final class SkillExecutionExecutor {
     ) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(hooks, "hooks");
-        return executeRoutes(context, context.preparedUse().onCastRoutes(), hooks);
+        SkillExecutionResult onCast = executeRoutes(context, context.preparedUse().onCastRoutes(), hooks);
+        SkillExecutionResult onSpellCast = executeRoutes(context, context.preparedUse().onSpellCastRoutes(), hooks);
+        return new SkillExecutionResult(
+                onCast.executedActions() + onSpellCast.executedActions(),
+                onCast.skippedActions() + onSpellCast.skippedActions(),
+                onCast.warnings()
+        );
     }
 
     public static SkillExecutionResult executeOnHit(
@@ -72,6 +78,10 @@ public final class SkillExecutionExecutor {
                 skipped += route.actions().size();
                 continue;
             }
+            if (!route.matches(context)) {
+                skipped += route.actions().size();
+                continue;
+            }
             int executedForRoute = executeRoute(context, route, hooks);
             executed += executedForRoute;
             skipped += route.actions().size() - executedForRoute;
@@ -90,6 +100,10 @@ public final class SkillExecutionExecutor {
         List<String> warnings = new ArrayList<>(context.preparedUse().warnings());
 
         for (PreparedSkillExecutionRoute route : routes) {
+            if (!route.matches(context)) {
+                skipped += route.actions().size();
+                continue;
+            }
             int executedForRoute = executeRoute(context, route, hooks);
             executed += executedForRoute;
             skipped += route.actions().size() - executedForRoute;
@@ -106,6 +120,9 @@ public final class SkillExecutionExecutor {
         int executed = 0;
         List<net.minecraft.world.entity.Entity> targets = context.resolveTargets(route.targets());
         for (PreparedSkillAction action : route.actions()) {
+            if (!action.matches(context)) {
+                continue;
+            }
             boolean completed = false;
             if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction preparedSoundAction) {
                 completed = hooks.playSound(context, targets, preparedSoundAction);

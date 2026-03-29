@@ -2,6 +2,7 @@ package kim.biryeong.esekai2.api.skill.execution;
 
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetSelector;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetType;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -96,6 +97,9 @@ public record SkillExecutionContext(
 
         LinkedHashSet<Entity> resolved = new LinkedHashSet<>();
         for (SkillTargetSelector selector : selectors) {
+            if (!matches(selector.enPreds())) {
+                continue;
+            }
             resolved.addAll(resolveTargets(selector));
         }
 
@@ -132,7 +136,7 @@ public record SkillExecutionContext(
     }
 
     private List<Entity> resolveAreaTargets(SkillTargetSelector selector) {
-        double radius = readRadius(selector);
+        double radius = readRadius(selector, this);
         if (!Double.isFinite(radius) || radius <= 0.0) {
             return List.of(primaryTarget());
         }
@@ -148,16 +152,20 @@ public record SkillExecutionContext(
         return List.copyOf(resolved);
     }
 
-    private static double readRadius(SkillTargetSelector selector) {
-        String rawRadius = selector.parameters().get("radius");
-        if (rawRadius == null || rawRadius.isBlank()) {
+    private static double readRadius(SkillTargetSelector selector, SkillExecutionContext context) {
+        double resolved = selector.radius().resolve(context.preparedUse().useContext());
+        if (!Double.isFinite(resolved) || resolved <= 0.0) {
             return 3.0;
         }
+        return resolved;
+    }
 
-        try {
-            return Double.parseDouble(rawRadius);
-        } catch (NumberFormatException exception) {
-            return 3.0;
+    private boolean matches(List<SkillPredicate> predicates) {
+        for (SkillPredicate predicate : predicates) {
+            if (!predicate.matches(this)) {
+                return false;
+            }
         }
+        return true;
     }
 }

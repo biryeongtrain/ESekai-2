@@ -12,33 +12,43 @@ import java.util.Objects;
  */
 public final class PreparedSkillUse {
     private final SkillDefinition skill;
+    private final SkillUseContext useContext;
     private final double resourceCost;
     private final int useTimeTicks;
     private final int cooldownTicks;
     private final List<PreparedSkillExecutionRoute> onCastRoutes;
+    private final List<PreparedSkillExecutionRoute> onSpellCastRoutes;
     private final Map<String, PreparedSkillEntityComponent> components;
     private final List<String> warnings;
 
     public PreparedSkillUse(
             SkillDefinition skill,
+            SkillUseContext useContext,
             double resourceCost,
             int useTimeTicks,
             int cooldownTicks,
             List<PreparedSkillExecutionRoute> onCastRoutes,
+            List<PreparedSkillExecutionRoute> onSpellCastRoutes,
             Map<String, PreparedSkillEntityComponent> components,
             List<String> warnings
     ) {
         this.skill = Objects.requireNonNull(skill, "skill");
+        this.useContext = Objects.requireNonNull(useContext, "useContext");
         this.resourceCost = resourceCost;
         this.useTimeTicks = useTimeTicks;
         this.cooldownTicks = cooldownTicks;
         this.onCastRoutes = List.copyOf(onCastRoutes);
+        this.onSpellCastRoutes = List.copyOf(onSpellCastRoutes);
         this.components = Map.copyOf(components);
         this.warnings = List.copyOf(warnings);
     }
 
     public SkillDefinition skill() {
         return skill;
+    }
+
+    public SkillUseContext useContext() {
+        return useContext;
     }
 
     public double resourceCost() {
@@ -63,6 +73,10 @@ public final class PreparedSkillUse {
 
     public List<PreparedSkillExecutionRoute> onCastRoutes() {
         return onCastRoutes;
+    }
+
+    public List<PreparedSkillExecutionRoute> onSpellCastRoutes() {
+        return onSpellCastRoutes;
     }
 
     public Map<String, PreparedSkillEntityComponent> components() {
@@ -96,6 +110,19 @@ public final class PreparedSkillUse {
             result.addAll(component.onExpireActions());
         }
         return List.copyOf(result);
+    }
+
+    public List<PreparedSkillAction> executeOnSpellCast() {
+        List<PreparedSkillAction> result = new ArrayList<>();
+        for (PreparedSkillExecutionRoute route : onSpellCastRoutes) {
+            result.addAll(route.actions());
+        }
+        return List.copyOf(result);
+    }
+
+    public List<PreparedSkillAction> executeOnSpellCast(String componentId) {
+        PreparedSkillEntityComponent component = requireComponent(componentId);
+        return component.onSpellCastActions();
     }
 
     public List<PreparedSkillAction> executeOnEntityExpire(String componentId) {

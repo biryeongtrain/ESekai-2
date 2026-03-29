@@ -17,24 +17,17 @@
             "type": "target"
           }
         ],
-        "acts": [
-          {
-            "type": "sound",
-            "map": {
-              "sound": "minecraft:block.anvil.land"
+          "acts": [
+            {
+              "type": "sound",
+              "sound_id": "minecraft:block.anvil.land"
+            },
+            {
+              "type": "damage",
+              "calculation_id": "esekai2:basic_strike_primary_hit"
             }
-          },
-          {
-            "type": "damage",
-            "map": {
-              "hit_kind": "attack",
-              "base_damage_physical": "12.0",
-              "base_critical_strike_chance": "0.0",
-              "base_critical_strike_multiplier": "100.0"
-            }
-          }
-        ]
-      }
+          ]
+        }
     ],
     "entity_components": {
       "basic_strike_component": [
@@ -47,12 +40,10 @@
           "acts": [
             {
               "type": "summon_at_sight",
-              "map": {
-                "entity_name": "strike_echo",
-                "proj_en": "minecraft:blaze",
-                "life_ticks": "2",
-                "gravity": "false"
-              }
+              "component_id": "strike_echo",
+              "entity_id": "minecraft:blaze",
+              "life_ticks": 2,
+              "gravity": false
             }
           ],
           "ifs": [
@@ -70,11 +61,9 @@
           "acts": [
             {
               "type": "summon_block",
-              "map": {
-                "entity_name": "strike_block",
-                "block": "minecraft:ender_chest",
-                "life_ticks": "1"
-              }
+              "component_id": "strike_block",
+              "block_id": "minecraft:ender_chest",
+              "life_ticks": 1
             }
           ],
           "ifs": [
@@ -87,27 +76,21 @@
           "targets": [
             {
               "type": "aoe",
-              "map": {
-                "radius": "1.5"
-              }
+              "radius": 1.5
             }
           ],
           "acts": [
             {
               "type": "sandstorm_particle",
-              "map": {
-                "particle_id": "sandstorm:magic",
-                "anchor": "caster_hand",
-                "offset_y": "1.0"
-              }
+              "particle_id": "sandstorm:magic",
+              "anchor": "caster_hand",
+              "offset_y": 1.0
             }
           ],
           "ifs": [
             {
               "type": "x_ticks_condition",
-              "map": {
-                "x_ticks": "6"
-              }
+              "interval": 6
             }
           ]
         }

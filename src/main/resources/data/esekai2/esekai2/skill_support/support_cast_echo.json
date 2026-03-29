@@ -1,0 +1,39 @@
+{
+  "identifier": "esekai2:support_cast_echo",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "appended_rules": [
+        {
+          "target": {
+            "type": "on_cast"
+          },
+          "rules": [
+            {
+              "targets": [
+                {
+                  "type": "target"
+                }
+              ],
+              "acts": [
+                {
+                  "type": "sound",
+                  "sound_id": "minecraft:block.note_block.bell"
+                }
+              ],
+              "en_preds": [
+                {
+                  "type": "has_target"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

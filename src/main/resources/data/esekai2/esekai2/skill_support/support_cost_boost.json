@@ -1,0 +1,27 @@
+{
+  "identifier": "esekai2:support_cost_boost",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "added_conditional_stat_modifiers": [
+        {
+          "modifier": {
+            "stat": "esekai2:skill_resource_cost",
+            "operation": "add",
+            "value": 4.0,
+            "source_id": "esekai2:support_cost_boost"
+          },
+          "skill_condition": {
+            "required_tags": [
+              "spell"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

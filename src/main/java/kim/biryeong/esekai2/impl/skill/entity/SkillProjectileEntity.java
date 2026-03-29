@@ -2,12 +2,14 @@ package kim.biryeong.esekai2.impl.skill.entity;
 
 import kim.biryeong.esekai2.impl.skill.execution.SkillRuntimeManager;
 import net.minecraft.resources.Identifier;
-import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -61,30 +63,54 @@ public final class SkillProjectileEntity extends SkillRuntimeEntity {
         move(MoverType.SELF, motion);
         setDeltaMovement(motion);
 
-        BlockPos blockPos = BlockPos.containing(next);
-        if (!level().getBlockState(blockPos).isAir()) {
-            recordHit(null, next);
-            SkillRuntimeManager.handleProjectileHit(this, null, next);
+        BlockHitResult blockHit = level().clip(new ClipContext(start, next, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
+        Vec3 segmentEnd = blockHit.getType() == HitResult.Type.BLOCK ? blockHit.getLocation() : next;
+
+        HitCandidate entityHit = findEntityHit(start, segmentEnd);
+        if (entityHit != null) {
+            recordHit(entityHit.entity(), entityHit.impactPosition());
+            SkillRuntimeManager.handleProjectileHit(this, entityHit.entity(), entityHit.impactPosition());
             return;
         }
 
-        AABB sweep = new AABB(
-                Math.min(start.x, next.x),
-                Math.min(start.y, next.y),
-                Math.min(start.z, next.z),
-                Math.max(start.x, next.x),
-                Math.max(start.y, next.y),
-                Math.max(start.z, next.z)
-        ).inflate(0.5D);
+        if (blockHit.getType() == HitResult.Type.BLOCK) {
+            recordHit(null, segmentEnd);
+            SkillRuntimeManager.handleProjectileHit(this, null, segmentEnd);
+            return;
+        }
+    }
+
+    private HitCandidate findEntityHit(Vec3 start, Vec3 end) {
+        AABB sweep = new AABB(start, end).inflate(1.0D);
         List<Entity> hits = level().getEntities(this, sweep, entity ->
                 entity.isAlive()
                         && entity != this
                         && (ownerUuid() == null || !ownerUuid().equals(entity.getUUID()))
         );
-        if (!hits.isEmpty()) {
-            recordHit(hits.getFirst(), next);
-            SkillRuntimeManager.handleProjectileHit(this, hits.getFirst(), next);
-            return;
+
+        HitCandidate bestHit = null;
+        double bestDistanceSqr = Double.POSITIVE_INFINITY;
+
+        for (Entity hit : hits) {
+            AABB bounds = hit.getBoundingBox().inflate(0.5D);
+            Vec3 impactPosition = bounds.clip(start, end).orElse(null);
+            if (impactPosition == null && bounds.contains(start)) {
+                impactPosition = start;
+            }
+            if (impactPosition == null) {
+                continue;
+            }
+
+            double distanceSqr = start.distanceToSqr(impactPosition);
+            if (distanceSqr < bestDistanceSqr) {
+                bestDistanceSqr = distanceSqr;
+                bestHit = new HitCandidate(hit, impactPosition);
+            }
         }
+
+        return bestHit;
+    }
+
+    private record HitCandidate(Entity entity, Vec3 impactPosition) {
     }
 }

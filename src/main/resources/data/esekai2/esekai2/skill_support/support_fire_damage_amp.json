@@ -1,0 +1,33 @@
+{
+  "identifier": "esekai2:support_fire_damage_amp",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "action_parameter_overrides": [
+        {
+          "action_type": "damage",
+          "matching_calculation_id": "esekai2:fireball_primary_hit",
+          "field_overrides": [
+            {
+              "path": {
+                "type": "parameter",
+                "parameter_key": "base_damage_fire"
+              },
+              "value": "24.0"
+            }
+          ]
+        }
+      ],
+      "appended_actions": [
+        {
+          "type": "damage",
+          "calculation_id": "esekai2:fireball_support_bonus_hit"
+        }
+      ]
+    }
+  ]
+}

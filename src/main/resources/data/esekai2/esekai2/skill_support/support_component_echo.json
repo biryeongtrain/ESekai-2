@@ -1,0 +1,40 @@
+{
+  "identifier": "esekai2:support_component_echo",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "projectile"
+        ]
+      },
+      "appended_rules": [
+        {
+          "target": {
+            "type": "entity_component",
+            "component_id": "default_entity_name"
+          },
+          "rules": [
+            {
+              "targets": [
+                {
+                  "type": "target"
+                }
+              ],
+              "acts": [
+                {
+                  "type": "sound",
+                  "sound_id": "minecraft:block.amethyst_block.chime"
+                }
+              ],
+              "ifs": [
+                {
+                  "type": "on_hit"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
