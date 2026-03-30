@@ -1,6 +1,7 @@
 package kim.biryeong.esekai2;
 
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
+import kim.biryeong.esekai2.impl.ailment.AilmentBootstrap;
 import kim.biryeong.esekai2.impl.config.monster.MonsterAffixConfigManager;
 import kim.biryeong.esekai2.impl.item.affix.AffixBootstrap;
 import kim.biryeong.esekai2.impl.item.level.ItemLevelBootstrap;
@@ -27,6 +28,7 @@ public class Esekai2 implements ModInitializer {
         AffixBootstrap.bootstrap();
         ItemLevelBootstrap.bootstrap();
         MonsterAffixBootstrap.bootstrap();
+        AilmentBootstrap.bootstrap();
         SkillBootstrap.bootstrap();
         SkillEntityBootstrap.bootstrap();
         MonsterLevelBootstrap.bootstrap();

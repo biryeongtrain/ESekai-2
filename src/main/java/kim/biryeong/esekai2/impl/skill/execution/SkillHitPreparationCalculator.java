@@ -2,9 +2,11 @@ package kim.biryeong.esekai2.impl.skill.execution;
 
 import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
+import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeCalculation;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitContext;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
+import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
@@ -13,6 +15,9 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillCondition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillConditionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
@@ -217,6 +222,9 @@ public final class SkillHitPreparationCalculator {
         return switch (type) {
             case SOUND -> parseSound(action, context, warnings);
             case DAMAGE -> parseDamage(action, context, warnings);
+            case APPLY_BUFF -> parseApplyBuff(action, context, warnings);
+            case APPLY_AILMENT -> parseApplyAilment(action, context, warnings);
+            case APPLY_DOT -> parseApplyDot(action, context, warnings);
             case PROJECTILE -> parseProjectile(action, context, warnings);
             case SUMMON_AT_SIGHT -> parseSummonAtSight(action, context, warnings);
             case SUMMON_BLOCK -> parseSummonBlock(action, context, warnings);
@@ -282,7 +290,125 @@ public final class SkillHitPreparationCalculator {
                         baseCriticalStrikeMultiplier
                 ),
                 context.defenderStats()
-        ), calculationId, action.enPreds());
+                ), calculationId, action.enPreds());
+    }
+
+    private static PreparedApplyBuffAction parseApplyBuff(
+            SkillAction action,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        Identifier effectId = parseIdentifier(action.effectId());
+        if (effectId == null) {
+            warnings.add("apply_buff action requires a valid effect_id");
+            return null;
+        }
+
+        int durationTicks = resolveInt(action.durationTicks(), context, 0);
+        if (durationTicks <= 0) {
+            warnings.add("apply_buff action requires duration_ticks > 0");
+            return null;
+        }
+
+        int amplifier = Math.max(0, resolveInt(action.amplifier(), context, 0));
+        return new PreparedApplyBuffAction(
+                effectId,
+                durationTicks,
+                amplifier,
+                action.ambient(),
+                action.showParticles(),
+                action.showIcon(),
+                action.enPreds()
+        );
+    }
+
+    private static PreparedApplyDotAction parseApplyDot(
+            SkillAction action,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        String dotId = readString(action.dotId());
+        if (dotId == null) {
+            warnings.add("apply_dot action requires dot_id");
+            return null;
+        }
+
+        int durationTicks = resolveInt(action.durationTicks(), context, 0);
+        if (durationTicks <= 0) {
+            warnings.add("apply_dot action requires duration_ticks > 0");
+            return null;
+        }
+
+        int tickIntervalTicks = resolveInt(action.tickIntervalTicks(), context, 1);
+        if (tickIntervalTicks <= 0) {
+            warnings.add("apply_dot action requires tick_interval > 0");
+            return null;
+        }
+
+        DamageBreakdown baseDamage = mergeInlineBaseDamage(DamageBreakdown.empty(), action.baseDamage(), context);
+        if (baseDamage.isEmpty()) {
+            warnings.add("apply_dot action requires base_damage");
+            return null;
+        }
+
+        return new PreparedApplyDotAction(
+                dotId,
+                new DamageOverTimeCalculation(
+                        baseDamage,
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        context.defenderStats()
+                ),
+                durationTicks,
+                tickIntervalTicks,
+                action.enPreds()
+        );
+    }
+
+    private static PreparedApplyAilmentAction parseApplyAilment(
+            SkillAction action,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        String rawAilmentId = readString(action.ailmentId());
+        if (rawAilmentId == null) {
+            warnings.add("apply_ailment action requires ailment_id");
+            return null;
+        }
+
+        AilmentType ailmentType = parseAilmentType(rawAilmentId);
+        if (ailmentType == null) {
+            warnings.add("apply_ailment action requires a valid ailment_id");
+            return null;
+        }
+
+        int durationTicks = resolveInt(action.durationTicks(), context, 0);
+        if (durationTicks <= 0) {
+            warnings.add("apply_ailment action requires duration_ticks > 0");
+            return null;
+        }
+
+        double chancePercent = resolveValue(action.chance(), context, 100.0);
+        if (!Double.isFinite(chancePercent) || chancePercent <= 0.0) {
+            warnings.add("apply_ailment action requires chance > 0");
+            return null;
+        }
+
+        double potencyMultiplierPercent = resolveValue(action.potencyMultiplier(), context, 100.0);
+        if (!Double.isFinite(potencyMultiplierPercent) || potencyMultiplierPercent < 0.0) {
+            warnings.add("apply_ailment action requires potency_multiplier >= 0");
+            return null;
+        }
+
+        return new PreparedApplyAilmentAction(
+                ailmentType,
+                Math.min(100.0, chancePercent),
+                durationTicks,
+                potencyMultiplierPercent,
+                action.enPreds()
+        );
     }
 
     private static SkillCalculationDefinition resolveCalculationDefinition(
@@ -391,6 +517,18 @@ public final class SkillHitPreparationCalculator {
             return null;
         }
         return Identifier.tryParse(value);
+    }
+
+    private static AilmentType parseAilmentType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        for (AilmentType type : AilmentType.values()) {
+            if (type.serializedName().equals(raw)) {
+                return type;
+            }
+        }
+        return null;
     }
 
     private static double resolveValue(SkillValueExpression expression, SkillUseContext context, double fallback) {

@@ -1,5 +1,4 @@
 package kim.biryeong.esekai2.api.damage.critical;
-
 /**
  * Captures the resolved outcome of one critical strike evaluation.
  *

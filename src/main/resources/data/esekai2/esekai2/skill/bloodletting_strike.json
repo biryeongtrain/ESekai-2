@@ -1,0 +1,43 @@
+{
+  "identifier": "esekai2:bloodletting_strike",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 10,
+    "cooldown_ticks": 0,
+    "tags": [
+      "attack",
+      "melee"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:entity.player.attack.crit"
+          },
+          {
+            "type": "damage",
+            "base_damage": {
+              "physical": 10.0
+            }
+          },
+          {
+            "type": "apply_ailment",
+            "ailment_id": "bleed",
+            "chance": 100.0,
+            "duration_ticks": 8,
+            "potency_multiplier": 100.0
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

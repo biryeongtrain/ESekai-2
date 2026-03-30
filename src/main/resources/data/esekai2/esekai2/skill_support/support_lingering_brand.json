@@ -1,0 +1,26 @@
+{
+  "identifier": "esekai2:support_lingering_brand",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "action_parameter_overrides": [
+        {
+          "action_type": "apply_dot",
+          "field_overrides": [
+            {
+              "path": {
+                "type": "parameter",
+                "parameter_key": "duration_ticks"
+              },
+              "value": "16.0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

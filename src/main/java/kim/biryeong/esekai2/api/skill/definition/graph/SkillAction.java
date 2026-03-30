@@ -8,6 +8,7 @@ import com.mojang.serialization.MapDecoder;
 import com.mojang.serialization.MapLike;
 import com.mojang.serialization.Encoder;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
@@ -32,6 +33,9 @@ import java.util.stream.Stream;
  * @param soundId sound id used by sound actions
  * @param particleId particle id used by sandstorm particle actions
  * @param calculationId datapack-backed damage calculation reference
+ * @param effectId mob effect id used by buff actions
+ * @param dotId stable identifier used by damage-over-time actions
+ * @param ailmentId stable ailment identifier used by ailment application actions
  * @param hitKind hit kind override used by damage actions
  * @param baseDamage inline typed base damage overrides used by damage actions
  * @param baseCriticalStrikeChance inline critical strike chance override used by damage actions
@@ -39,7 +43,15 @@ import java.util.stream.Stream;
  * @param volume sound volume payload
  * @param pitch sound pitch payload
  * @param lifeTicks projectile or summon lifetime payload
+ * @param durationTicks buff or dot duration payload
+ * @param amplifier buff amplifier payload
+ * @param chance ailment chance percentage payload
+ * @param potencyMultiplier ailment potency multiplier percentage payload
+ * @param tickIntervalTicks damage-over-time tick interval payload
  * @param gravity gravity toggle for projectile and summon actions
+ * @param ambient buff ambient toggle
+ * @param showParticles buff particle visibility toggle
+ * @param showIcon buff icon visibility toggle
  * @param anchor particle anchor string
  * @param offsetX particle offset x payload
  * @param offsetY particle offset y payload
@@ -54,6 +66,9 @@ public record SkillAction(
         String soundId,
         String particleId,
         String calculationId,
+        String effectId,
+        String dotId,
+        String ailmentId,
         HitKind hitKind,
         Map<DamageType, SkillValueExpression> baseDamage,
         SkillValueExpression baseCriticalStrikeChance,
@@ -61,7 +76,15 @@ public record SkillAction(
         SkillValueExpression volume,
         SkillValueExpression pitch,
         SkillValueExpression lifeTicks,
+        SkillValueExpression durationTicks,
+        SkillValueExpression amplifier,
+        SkillValueExpression chance,
+        SkillValueExpression potencyMultiplier,
+        SkillValueExpression tickIntervalTicks,
         boolean gravity,
+        boolean ambient,
+        boolean showParticles,
+        boolean showIcon,
         String anchor,
         SkillValueExpression offsetX,
         SkillValueExpression offsetY,
@@ -87,7 +110,10 @@ public record SkillAction(
             Codec.STRING.optionalFieldOf("block_id", "").forGetter(IdentityPayload::blockId),
             Codec.STRING.optionalFieldOf("sound_id", "").forGetter(IdentityPayload::soundId),
             Codec.STRING.optionalFieldOf("particle_id", "").forGetter(IdentityPayload::particleId),
-            Codec.STRING.optionalFieldOf("calculation_id", "").forGetter(IdentityPayload::calculationId)
+            Codec.STRING.optionalFieldOf("calculation_id", "").forGetter(IdentityPayload::calculationId),
+            Codec.STRING.optionalFieldOf("effect_id", "").forGetter(IdentityPayload::effectId),
+            Codec.STRING.optionalFieldOf("dot_id", "").forGetter(IdentityPayload::dotId),
+            Codec.STRING.optionalFieldOf("ailment_id", "").forGetter(IdentityPayload::ailmentId)
     ).apply(instance, IdentityPayload::new));
 
     private static final MapCodec<DamagePayload> DAMAGE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -103,18 +129,26 @@ public record SkillAction(
             SkillValueExpression.CODEC.optionalFieldOf("volume", SkillValueExpression.constant(1.0)).forGetter(RuntimePayload::volume),
             SkillValueExpression.CODEC.optionalFieldOf("pitch", SkillValueExpression.constant(1.0)).forGetter(RuntimePayload::pitch),
             SkillValueExpression.CODEC.optionalFieldOf("life_ticks", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::lifeTicks),
+            SkillValueExpression.CODEC.optionalFieldOf("duration_ticks", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::durationTicks),
+            SkillValueExpression.CODEC.optionalFieldOf("amplifier", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::amplifier),
+            SkillValueExpression.CODEC.optionalFieldOf("chance", SkillValueExpression.constant(100.0)).forGetter(RuntimePayload::chance),
+            SkillValueExpression.CODEC.optionalFieldOf("potency_multiplier", SkillValueExpression.constant(100.0)).forGetter(RuntimePayload::potencyMultiplier),
+            SkillValueExpression.CODEC.optionalFieldOf("tick_interval", SkillValueExpression.constant(1.0)).forGetter(RuntimePayload::tickIntervalTicks),
             Codec.BOOL.optionalFieldOf("gravity", false).forGetter(RuntimePayload::gravity),
+            Codec.BOOL.optionalFieldOf("ambient", false).forGetter(RuntimePayload::ambient),
+            Codec.BOOL.optionalFieldOf("show_particles", true).forGetter(RuntimePayload::showParticles),
+            Codec.BOOL.optionalFieldOf("show_icon", true).forGetter(RuntimePayload::showIcon),
             Codec.STRING.optionalFieldOf("anchor", "self").forGetter(RuntimePayload::anchor),
             SkillValueExpression.CODEC.optionalFieldOf("offset_x", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::offsetX),
             SkillValueExpression.CODEC.optionalFieldOf("offset_y", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::offsetY),
-            SkillValueExpression.CODEC.optionalFieldOf("offset_z", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::offsetZ),
-            SkillPredicate.CODEC.listOf().optionalFieldOf("en_preds", List.of()).forGetter(RuntimePayload::enPreds)
+            SkillValueExpression.CODEC.optionalFieldOf("offset_z", SkillValueExpression.constant(0.0)).forGetter(RuntimePayload::offsetZ)
     ).apply(instance, RuntimePayload::new));
 
     private static final Codec<SkillAction> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             IDENTITY_CODEC.forGetter(SkillAction::identityPayload),
             DAMAGE_CODEC.forGetter(SkillAction::damagePayload),
             RUNTIME_CODEC.forGetter(SkillAction::runtimePayload),
+            SkillPredicate.CODEC.listOf().optionalFieldOf("en_preds", List.of()).forGetter(SkillAction::enPreds),
             Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("map", Map.of())
                     .forGetter(SkillAction::legacyParameters)
     ).apply(instance, SkillAction::fromCodec));
@@ -144,7 +178,7 @@ public record SkillAction(
     public static final Codec<SkillAction> CODEC = Codec.withAlternative(BASE_CODEC, LEGACY_CODEC).validate(SkillAction::validate);
 
     private IdentityPayload identityPayload() {
-        return new IdentityPayload(type, componentId, entityId, blockId, soundId, particleId, calculationId);
+        return new IdentityPayload(type, componentId, entityId, blockId, soundId, particleId, calculationId, effectId, dotId, ailmentId);
     }
 
     private DamagePayload damagePayload() {
@@ -152,13 +186,31 @@ public record SkillAction(
     }
 
     private RuntimePayload runtimePayload() {
-        return new RuntimePayload(volume, pitch, lifeTicks, gravity, anchor, offsetX, offsetY, offsetZ, enPreds);
+        return new RuntimePayload(
+                volume,
+                pitch,
+                lifeTicks,
+                durationTicks,
+                amplifier,
+                chance,
+                potencyMultiplier,
+                tickIntervalTicks,
+                gravity,
+                ambient,
+                showParticles,
+                showIcon,
+                anchor,
+                offsetX,
+                offsetY,
+                offsetZ
+        );
     }
 
     private static SkillAction fromCodec(
             IdentityPayload identity,
             DamagePayload damage,
             RuntimePayload runtime,
+            List<SkillPredicate> enPreds,
             Map<String, String> legacyParameters
     ) {
         String componentId = identity.componentId();
@@ -189,6 +241,21 @@ public record SkillAction(
         String calculationId = identity.calculationId();
         if (calculationId.isBlank()) {
             calculationId = readString(legacyParameters, "calculation_id");
+        }
+
+        String effectId = identity.effectId();
+        if (effectId.isBlank()) {
+            effectId = readString(legacyParameters, "effect_id");
+        }
+
+        String dotId = identity.dotId();
+        if (dotId.isBlank()) {
+            dotId = readString(legacyParameters, "dot_id");
+        }
+
+        String ailmentId = identity.ailmentId();
+        if (ailmentId.isBlank()) {
+            ailmentId = readString(legacyParameters, "ailment_id");
         }
 
         HitKind hitKind = damage.hitKind();
@@ -231,10 +298,53 @@ public record SkillAction(
             lifeTicks = parseExpression(legacyParameters, "life_ticks", 0.0);
         }
 
+        SkillValueExpression durationTicks = runtime.durationTicks();
+        if (isDefaultExpression(durationTicks, 0.0)) {
+            durationTicks = parseExpression(legacyParameters, "duration_ticks", 0.0);
+        }
+
+        SkillValueExpression amplifier = runtime.amplifier();
+        if (isDefaultExpression(amplifier, 0.0)) {
+            amplifier = parseExpression(legacyParameters, "amplifier", 0.0);
+        }
+
+        SkillValueExpression chance = runtime.chance();
+        if (isDefaultExpression(chance, 100.0)) {
+            chance = parseExpression(legacyParameters, "chance", 100.0);
+        }
+
+        SkillValueExpression potencyMultiplier = runtime.potencyMultiplier();
+        if (isDefaultExpression(potencyMultiplier, 100.0)) {
+            potencyMultiplier = parseExpression(legacyParameters, "potency_multiplier", 100.0);
+        }
+
+        SkillValueExpression tickIntervalTicks = runtime.tickIntervalTicks();
+        if (isDefaultExpression(tickIntervalTicks, 1.0)) {
+            tickIntervalTicks = parseExpression(legacyParameters, "tick_interval", 1.0);
+        }
+
         boolean gravity = runtime.gravity();
         String legacyGravity = readString(legacyParameters, "gravity");
         if (!legacyGravity.isBlank()) {
             gravity = parseBoolean(legacyGravity);
+        }
+
+        boolean ambient = runtime.ambient();
+        String legacyAmbient = readString(legacyParameters, "ambient");
+        if (!legacyAmbient.isBlank()) {
+            ambient = parseBoolean(legacyAmbient);
+        }
+
+        boolean showParticles = runtime.showParticles();
+        String legacyShowParticles = readString(legacyParameters, "show_particles");
+        if (!legacyShowParticles.isBlank()) {
+            showParticles = parseBoolean(legacyShowParticles);
+        }
+
+        boolean showIcon = runtime.showIcon();
+        String legacyShowIcon = readString(legacyParameters, "show_icon");
+        if (!legacyShowIcon.isBlank()) {
+            showIcon = parseBoolean(legacyShowIcon);
         }
 
         String anchor = runtime.anchor();
@@ -268,6 +378,9 @@ public record SkillAction(
                 soundId,
                 particleId,
                 calculationId,
+                effectId,
+                dotId,
+                ailmentId,
                 hitKind,
                 baseDamage,
                 baseCriticalStrikeChance,
@@ -275,12 +388,20 @@ public record SkillAction(
                 volume,
                 pitch,
                 lifeTicks,
+                durationTicks,
+                amplifier,
+                chance,
+                potencyMultiplier,
+                tickIntervalTicks,
                 gravity,
+                ambient,
+                showParticles,
+                showIcon,
                 anchor,
                 offsetX,
                 offsetY,
                 offsetZ,
-                runtime.enPreds()
+                enPreds
         );
     }
 
@@ -311,6 +432,9 @@ public record SkillAction(
                 .orElseGet(() -> readOptionalField(ops, input, "sound", Codec.STRING).orElse(""));
         String particleId = readOptionalField(ops, input, "particle_id", Codec.STRING).orElse("");
         String calculationId = readOptionalField(ops, input, "calculation_id", Codec.STRING).orElse("");
+        String effectId = readOptionalField(ops, input, "effect_id", Codec.STRING).orElse("");
+        String dotId = readOptionalField(ops, input, "dot_id", Codec.STRING).orElse("");
+        String ailmentId = readOptionalField(ops, input, "ailment_id", Codec.STRING).orElse("");
         HitKind hitKind = readOptionalField(ops, input, "hit_kind", HitKind.CODEC).orElse(HitKind.ATTACK);
         Map<DamageType, SkillValueExpression> baseDamage = readLegacyBaseDamage(ops, input);
         SkillValueExpression baseCriticalStrikeChance = readOptionalField(ops, input, "base_critical_strike_chance", SkillValueExpression.CODEC)
@@ -323,7 +447,20 @@ public record SkillAction(
                 .orElse(SkillValueExpression.constant(1.0));
         SkillValueExpression lifeTicks = readOptionalField(ops, input, "life_ticks", SkillValueExpression.CODEC)
                 .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression durationTicks = readOptionalField(ops, input, "duration_ticks", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression amplifier = readOptionalField(ops, input, "amplifier", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
+        SkillValueExpression chance = readOptionalField(ops, input, "chance", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(100.0));
+        SkillValueExpression potencyMultiplier = readOptionalField(ops, input, "potency_multiplier", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(100.0));
+        SkillValueExpression tickIntervalTicks = readOptionalField(ops, input, "tick_interval", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(1.0));
         boolean gravity = readOptionalField(ops, input, "gravity", Codec.BOOL).orElse(false);
+        boolean ambient = readOptionalField(ops, input, "ambient", Codec.BOOL).orElse(false);
+        boolean showParticles = readOptionalField(ops, input, "show_particles", Codec.BOOL).orElse(true);
+        boolean showIcon = readOptionalField(ops, input, "show_icon", Codec.BOOL).orElse(true);
         String anchor = readOptionalField(ops, input, "anchor", Codec.STRING).orElse("self");
         SkillValueExpression offsetX = readOptionalField(ops, input, "offset_x", SkillValueExpression.CODEC)
                 .orElse(SkillValueExpression.constant(0.0));
@@ -342,6 +479,9 @@ public record SkillAction(
                 soundId,
                 particleId,
                 calculationId,
+                effectId,
+                dotId,
+                ailmentId,
                 hitKind,
                 baseDamage,
                 baseCriticalStrikeChance,
@@ -349,7 +489,15 @@ public record SkillAction(
                 volume,
                 pitch,
                 lifeTicks,
+                durationTicks,
+                amplifier,
+                chance,
+                potencyMultiplier,
+                tickIntervalTicks,
                 gravity,
+                ambient,
+                showParticles,
+                showIcon,
                 anchor,
                 offsetX,
                 offsetY,
@@ -385,6 +533,9 @@ public record SkillAction(
         Objects.requireNonNull(soundId, "soundId");
         Objects.requireNonNull(particleId, "particleId");
         Objects.requireNonNull(calculationId, "calculationId");
+        Objects.requireNonNull(effectId, "effectId");
+        Objects.requireNonNull(dotId, "dotId");
+        Objects.requireNonNull(ailmentId, "ailmentId");
         Objects.requireNonNull(hitKind, "hitKind");
         Objects.requireNonNull(baseDamage, "baseDamage");
         Objects.requireNonNull(baseCriticalStrikeChance, "baseCriticalStrikeChance");
@@ -392,6 +543,11 @@ public record SkillAction(
         Objects.requireNonNull(volume, "volume");
         Objects.requireNonNull(pitch, "pitch");
         Objects.requireNonNull(lifeTicks, "lifeTicks");
+        Objects.requireNonNull(durationTicks, "durationTicks");
+        Objects.requireNonNull(amplifier, "amplifier");
+        Objects.requireNonNull(chance, "chance");
+        Objects.requireNonNull(potencyMultiplier, "potencyMultiplier");
+        Objects.requireNonNull(tickIntervalTicks, "tickIntervalTicks");
         Objects.requireNonNull(anchor, "anchor");
         Objects.requireNonNull(offsetX, "offsetX");
         Objects.requireNonNull(offsetY, "offsetY");
@@ -427,6 +583,9 @@ public record SkillAction(
                 readString(parameters, "sound_id", "sound"),
                 readString(parameters, "particle_id"),
                 calculationId == null || calculationId.isBlank() ? readString(parameters, "calculation_id") : calculationId,
+                readString(parameters, "effect_id"),
+                readString(parameters, "dot_id"),
+                readString(parameters, "ailment_id"),
                 parseHitKind(readString(parameters, "hit_kind")),
                 parseBaseDamage(parameters),
                 parseExpression(parameters, "base_critical_strike_chance", 0.0),
@@ -434,7 +593,15 @@ public record SkillAction(
                 parseExpression(parameters, "volume", 1.0),
                 parseExpression(parameters, "pitch", 1.0),
                 parseExpression(parameters, "life_ticks", 0.0),
+                parseExpression(parameters, "duration_ticks", 0.0),
+                parseExpression(parameters, "amplifier", 0.0),
+                parseExpression(parameters, "chance", 100.0),
+                parseExpression(parameters, "potency_multiplier", 100.0),
+                parseExpression(parameters, "tick_interval", 1.0),
                 parseBoolean(parameters.get("gravity")),
+                parseBoolean(parameters.get("ambient")),
+                !parameters.containsKey("show_particles") || parseBoolean(parameters.get("show_particles")),
+                !parameters.containsKey("show_icon") || parseBoolean(parameters.get("show_icon")),
                 readString(parameters, "anchor", "self"),
                 parseExpression(parameters, "offset_x", 0.0),
                 parseExpression(parameters, "offset_y", 0.0),
@@ -459,6 +626,9 @@ public record SkillAction(
                 soundId.toString(),
                 "",
                 "",
+                "",
+                "",
+                "",
                 HitKind.ATTACK,
                 Map.of(),
                 SkillValueExpression.constant(0.0),
@@ -466,7 +636,15 @@ public record SkillAction(
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(1.0),
                 false,
+                false,
+                true,
+                true,
                 "self",
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(0.0),
@@ -491,6 +669,9 @@ public record SkillAction(
                 "",
                 "",
                 calculationId.toString(),
+                "",
+                "",
+                "",
                 HitKind.ATTACK,
                 Map.of(),
                 SkillValueExpression.constant(0.0),
@@ -498,12 +679,80 @@ public record SkillAction(
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(1.0),
                 false,
+                false,
+                true,
+                true,
                 "self",
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(0.0),
                 List.of()
+        );
+    }
+
+    /**
+     * Compatibility constructor preserved for existing typed graph call sites that do not use buff/dot fields.
+     */
+    public SkillAction(
+            SkillActionType type,
+            String componentId,
+            String entityId,
+            String blockId,
+            String soundId,
+            String particleId,
+            String calculationId,
+            HitKind hitKind,
+            Map<DamageType, SkillValueExpression> baseDamage,
+            SkillValueExpression baseCriticalStrikeChance,
+            SkillValueExpression baseCriticalStrikeMultiplier,
+            SkillValueExpression volume,
+            SkillValueExpression pitch,
+            SkillValueExpression lifeTicks,
+            boolean gravity,
+            String anchor,
+            SkillValueExpression offsetX,
+            SkillValueExpression offsetY,
+            SkillValueExpression offsetZ,
+            List<SkillPredicate> enPreds
+    ) {
+        this(
+                type,
+                componentId,
+                entityId,
+                blockId,
+                soundId,
+                particleId,
+                calculationId,
+                "",
+                "",
+                "",
+                hitKind,
+                baseDamage,
+                baseCriticalStrikeChance,
+                baseCriticalStrikeMultiplier,
+                volume,
+                pitch,
+                lifeTicks,
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(1.0),
+                gravity,
+                false,
+                true,
+                true,
+                anchor,
+                offsetX,
+                offsetY,
+                offsetZ,
+                enPreds
         );
     }
 
@@ -534,12 +783,29 @@ public record SkillAction(
         if (!particleId.isBlank()) {
             parameters.put("particle_id", particleId);
         }
+        if (!effectId.isBlank()) {
+            parameters.put("effect_id", effectId);
+        }
+        if (!dotId.isBlank()) {
+            parameters.put("dot_id", dotId);
+        }
+        if (!ailmentId.isBlank()) {
+            parameters.put("ailment_id", ailmentId);
+        }
         parameters.put("hit_kind", hitKind.serializedName());
         parameters.put("gravity", Boolean.toString(gravity));
+        parameters.put("ambient", Boolean.toString(ambient));
+        parameters.put("show_particles", Boolean.toString(showParticles));
+        parameters.put("show_icon", Boolean.toString(showIcon));
         parameters.put("anchor", anchor);
         parameters.put("volume", serializeExpression(volume));
         parameters.put("pitch", serializeExpression(pitch));
         parameters.put("life_ticks", serializeExpression(lifeTicks));
+        parameters.put("duration_ticks", serializeExpression(durationTicks));
+        parameters.put("amplifier", serializeExpression(amplifier));
+        parameters.put("chance", serializeExpression(chance));
+        parameters.put("potency_multiplier", serializeExpression(potencyMultiplier));
+        parameters.put("tick_interval", serializeExpression(tickIntervalTicks));
         parameters.put("offset_x", serializeExpression(offsetX));
         parameters.put("offset_y", serializeExpression(offsetY));
         parameters.put("offset_z", serializeExpression(offsetZ));
@@ -561,8 +827,24 @@ public record SkillAction(
             return DataResult.error(() -> "calculation_id must be a valid identifier: " + action.calculationId());
         }
 
+        if (!action.effectId().isBlank() && Identifier.tryParse(action.effectId()) == null) {
+            return DataResult.error(() -> "effect_id must be a valid identifier: " + action.effectId());
+        }
+
         if (action.type() == SkillActionType.SOUND && Identifier.tryParse(action.soundId()) == null) {
             return DataResult.error(() -> "sound action requires a valid sound_id");
+        }
+
+        if (action.type() == SkillActionType.APPLY_BUFF && Identifier.tryParse(action.effectId()) == null) {
+            return DataResult.error(() -> "apply_buff action requires a valid effect_id");
+        }
+
+        if (action.type() == SkillActionType.APPLY_AILMENT && parseAilmentType(action.ailmentId()) == null) {
+            return DataResult.error(() -> "apply_ailment action requires a valid ailment_id");
+        }
+
+        if (action.type() == SkillActionType.APPLY_DOT && action.dotId().isBlank()) {
+            return DataResult.error(() -> "apply_dot action requires a non-blank dot_id");
         }
 
         if (action.type() == SkillActionType.SANDSTORM_PARTICLE && Identifier.tryParse(action.particleId()) == null) {
@@ -677,6 +959,18 @@ public record SkillAction(
         return HitKind.ATTACK;
     }
 
+    private static AilmentType parseAilmentType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        for (AilmentType type : AilmentType.values()) {
+            if (type.serializedName().equals(raw)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
     private static String serializeExpression(SkillValueExpression expression) {
         if (expression.isConstant()) {
             return Double.toString(expression.constant());
@@ -698,7 +992,10 @@ public record SkillAction(
             String blockId,
             String soundId,
             String particleId,
-            String calculationId
+            String calculationId,
+            String effectId,
+            String dotId,
+            String ailmentId
     ) {
     }
 
@@ -714,12 +1011,19 @@ public record SkillAction(
             SkillValueExpression volume,
             SkillValueExpression pitch,
             SkillValueExpression lifeTicks,
+            SkillValueExpression durationTicks,
+            SkillValueExpression amplifier,
+            SkillValueExpression chance,
+            SkillValueExpression potencyMultiplier,
+            SkillValueExpression tickIntervalTicks,
             boolean gravity,
+            boolean ambient,
+            boolean showParticles,
+            boolean showIcon,
             String anchor,
             SkillValueExpression offsetX,
             SkillValueExpression offsetY,
-            SkillValueExpression offsetZ,
-            List<SkillPredicate> enPreds
+            SkillValueExpression offsetZ
     ) {
     }
 }

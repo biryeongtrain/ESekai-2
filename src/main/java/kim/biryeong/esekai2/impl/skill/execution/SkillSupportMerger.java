@@ -157,6 +157,9 @@ public final class SkillSupportMerger {
         String soundId = action.soundId();
         String particleId = action.particleId();
         String calculationId = action.calculationId();
+        String effectId = action.effectId();
+        String dotId = action.dotId();
+        String ailmentId = action.ailmentId();
         HitKind hitKind = action.hitKind();
         Map<DamageType, SkillValueExpression> baseDamage = new LinkedHashMap<>(action.baseDamage());
         SkillValueExpression baseCriticalStrikeChance = action.baseCriticalStrikeChance();
@@ -164,7 +167,15 @@ public final class SkillSupportMerger {
         SkillValueExpression volume = action.volume();
         SkillValueExpression pitch = action.pitch();
         SkillValueExpression lifeTicks = action.lifeTicks();
+        SkillValueExpression durationTicks = action.durationTicks();
+        SkillValueExpression amplifier = action.amplifier();
+        SkillValueExpression chance = action.chance();
+        SkillValueExpression potencyMultiplier = action.potencyMultiplier();
+        SkillValueExpression tickIntervalTicks = action.tickIntervalTicks();
         boolean gravity = action.gravity();
+        boolean ambient = action.ambient();
+        boolean showParticles = action.showParticles();
+        boolean showIcon = action.showIcon();
         String anchor = action.anchor();
         SkillValueExpression offsetX = action.offsetX();
         SkillValueExpression offsetY = action.offsetY();
@@ -187,6 +198,12 @@ public final class SkillSupportMerger {
                 soundId = fieldOverride.value();
             } else if (key.equals("particle_id")) {
                 particleId = fieldOverride.value();
+            } else if (key.equals("effect_id")) {
+                effectId = fieldOverride.value();
+            } else if (key.equals("dot_id")) {
+                dotId = fieldOverride.value();
+            } else if (key.equals("ailment_id")) {
+                ailmentId = fieldOverride.value();
             } else if (key.equals("hit_kind")) {
                 hitKind = parseHitKind(fieldOverride.value());
             } else if (key.startsWith("base_damage_")) {
@@ -204,8 +221,24 @@ public final class SkillSupportMerger {
                 pitch = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 1.0));
             } else if (key.equals("life_ticks")) {
                 lifeTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+            } else if (key.equals("duration_ticks")) {
+                durationTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+            } else if (key.equals("amplifier")) {
+                amplifier = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+            } else if (key.equals("chance")) {
+                chance = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 100.0));
+            } else if (key.equals("potency_multiplier")) {
+                potencyMultiplier = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 100.0));
+            } else if (key.equals("tick_interval")) {
+                tickIntervalTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 1.0));
             } else if (key.equals("gravity")) {
                 gravity = Boolean.parseBoolean(fieldOverride.value());
+            } else if (key.equals("ambient")) {
+                ambient = Boolean.parseBoolean(fieldOverride.value());
+            } else if (key.equals("show_particles")) {
+                showParticles = Boolean.parseBoolean(fieldOverride.value());
+            } else if (key.equals("show_icon")) {
+                showIcon = Boolean.parseBoolean(fieldOverride.value());
             } else if (key.equals("anchor")) {
                 anchor = fieldOverride.value();
             } else if (key.equals("offset_x")) {
@@ -225,6 +258,9 @@ public final class SkillSupportMerger {
                 soundId,
                 particleId,
                 calculationId,
+                effectId,
+                dotId,
+                ailmentId,
                 hitKind,
                 Map.copyOf(baseDamage),
                 baseCriticalStrikeChance,
@@ -232,7 +268,15 @@ public final class SkillSupportMerger {
                 volume,
                 pitch,
                 lifeTicks,
+                durationTicks,
+                amplifier,
+                chance,
+                potencyMultiplier,
+                tickIntervalTicks,
                 gravity,
+                ambient,
+                showParticles,
+                showIcon,
                 anchor,
                 offsetX,
                 offsetY,

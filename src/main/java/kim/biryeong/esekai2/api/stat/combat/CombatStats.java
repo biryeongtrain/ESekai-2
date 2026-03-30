@@ -102,6 +102,11 @@ public final class CombatStats {
      */
     public static final ResourceKey<StatDefinition> SPELL_CRITICAL_STRIKE_MULTIPLIER_BONUS = stat("spell_critical_strike_multiplier_bonus");
 
+    /**
+     * Final multiplicative damage taken modifier applied after mitigation.
+     */
+    public static final ResourceKey<StatDefinition> DAMAGE_TAKEN_MORE = stat("damage_taken_more");
+
     private CombatStats() {
     }
 

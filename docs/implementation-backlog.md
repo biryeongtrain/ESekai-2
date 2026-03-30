@@ -26,12 +26,12 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 30개입니다.
+- 완료된 기반 작업은 현재 33개입니다.
 - 현재 활성 백로그는 2개입니다.
   - `Full data-driven skill system`
   - `Ailment system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 총 165개 GameTest 중 required Fabric GameTest 165개가 전부 통과했습니다.
+- 최신 안정 기준에서는 required Fabric GameTest 168개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -52,6 +52,8 @@
   - socket-backed active/support foundation 이 도입되어 `skill_support` datapack registry, item socket state, linked support merge seam 이 준비되어 있습니다.
   - player-selected active skill state 와 equipped socket item cast resolver 가 추가되어 `main hand/off hand/armor` 기준 selected cast prepare/execute 경로가 서버 API 로 연결되어 있습니다.
   - support semantics 가 확장되어 `appended_rules`, socket index precedence, 최소 predicate/condition tie-in 이 selected cast path 위에서 동작합니다.
+  - `apply_buff`, `apply_dot`, `apply_ailment` action 이 typed graph, selected cast path, support override path 에 연결되어 있습니다.
+  - `IGNITE`, `SHOCK`, `POISON`, `BLEED` 는 `MobEffect + attachment payload` 구조로 실제 runtime tick 또는 damage amplification 에 연결되어 있습니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
 - 몬스터 시스템
   - monster stat baseline, monster level scaling, rarity 기반 item level derivation 이 구현되어 있습니다.
@@ -220,6 +222,16 @@
    - skill graph 의 주요 numeric payload 가 `SkillValueExpression` 기반 typed schema 로 정리되어 `SkillAction`, `SkillTargetSelector`, `SkillCondition`, `SkillPredicate` 에 연결되어 있습니다.
    - `esekai2:skill_value` registry 와 typed `SkillCalculationDefinition` 이 추가되어 reusable scalar/value ref 와 calculation ref 를 datapack 에서 해석할 수 있습니다.
    - route/selector/action predicate 가 runtime prepare/execute path 와 support/selected cast path 위에서 동작하며, required Fabric GameTest 168개가 green 입니다.
+
+32. Hit-external effect expansion - Buff + DoT foundation
+   - typed graph 에 `apply_buff`, `apply_dot` action 이 추가되어 self/target effect 와 generic skill-owned DoT runtime 이 datapack 으로 authoring 가능합니다.
+   - generic DoT 는 별도 server runtime manager 로 관리되며 selected cast path 와 support override 로 duration/tick payload 변경이 가능합니다.
+   - buff/dot execution path 는 GameTest 로 registry load, prepared decode, 실제 tick/expire, selected cast override 까지 검증되었습니다.
+
+33. MobEffect-based ailment foundation
+   - typed graph 에 `apply_ailment` action 이 추가되었고, `IGNITE`, `SHOCK`, `POISON`, `BLEED` 가 `MobEffect identity + attachment-backed payload` 구조로 구현되어 있습니다.
+   - ailment potency 기준은 final dealt damage 이고, DoT ailment 는 periodic tick damage, shock 는 defender-side `damage_taken_more` 경로로 hit 와 generic DoT 둘 다 증폭합니다.
+   - ailment effect registration, attachment codec round-trip, prepare/decode, stronger-only reapply, tick damage, selected cast support override 까지 GameTest 로 검증되었습니다.
 
 ### Existing Verification Baseline
 
@@ -392,13 +404,13 @@
      - `socket-backed active skill cast path integration`
      - `support semantics expansion`
      - `AoE-style calculation/predicate expansion`
-   - 다음 작업 범위:
-     - hit 외 effect 타입을 typed graph 위에 추가
-     - ailment/buff/debuff/DOT application seam 을 datapack authoring surface 로 연결
-     - support/selected cast path 와 새 effect semantics 연결
+- 다음 작업 범위:
+     - `apply_buff` 중심의 현재 buff surface 를 `MobEffect` 지향의 일반 effect authoring 으로 정리
+     - debuff / utility effect semantics 와 stacking or refresh policy 를 typed graph 위에 추가
+     - support/selected cast path 와 effect semantics 를 계속 일관되게 유지
      - 확장된 effect semantics 를 GameTest 로 검증
    - 후속 구현 순서:
-      - hit 외 effect 타입 확장
+      - `MobEffect-based buff/debuff effect integration`
    - 완료 기준:
      - calculation reference 와 predicate 축이 현재 damage/on-cast 중심 경계를 넘어 더 넓은 graph/runtime 경로에 연결됨
      - datapack author 가 더 많은 runtime gating/calculation 재사용을 코드 수정 없이 할 수 있음
@@ -407,28 +419,32 @@
 2. Ailment system
    - 목적: PoE 감성의 주요 상태이상 계산 축을 도입한다.
    - 포함 범위:
-     - `IGNITE`
      - `CHILL`
      - `FREEZE`
+     - `STUN`
+   - 현재 완료 범위:
+     - `IGNITE`
      - `SHOCK`
      - `POISON`
      - `BLEED`
-     - `STUN`
    - 제외 범위:
      - 모든 세부 공식의 완전 복제
    - 완료 기준:
-     - 최소 1개 hit 기반 ailment 와 1개 dot 기반 ailment 가 계산 경로에 연결됨
-     - GameTest 로 상태이상 부여 또는 결과 검증
+     - 남은 `CHILL`, `FREEZE`, `STUN` 이 같은 `MobEffect + attachment payload` 구조에 연결됨
+     - GameTest 로 상태이상 부여, 지속, 제거, 후속 전투 영향이 검증됨
 
 ## Next Focus
 
 - 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
-- 방금 완료된 승인 단위는 `AoE-style calculation/predicate expansion` 입니다.
-- 이번 완료 단위로 `calculation_id`, `skill_value`, route/selector/action predicate 가 AoE 지향 typed expression layer 로 연결되었습니다.
-- 현재 다음 승인 단위는 `hit 외 effect 타입 확장` 입니다.
+- 방금 완료된 승인 단위는 `MobEffect-based ailment foundation` 입니다.
+- 이번 완료 단위로 `apply_ailment`, `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `MobEffect + attachment payload`, `damage_taken_more` 연동이 추가되었습니다.
+- 직전 단위로 `apply_buff`, `apply_dot`, generic skill-owned DoT runtime, socket support override, selected cast path integration 이 이미 들어가 있습니다.
+- `AoE-style calculation/predicate expansion` 은 직전 단위에서 완료되었고, `calculation_id`, `skill_value`, route/selector/action predicate 는 AoE 지향 typed expression layer 로 이미 연결되어 있습니다.
+- `Ailment system` 은 일부 진행 상태이며, 남은 범위는 `CHILL / FREEZE / STUN` 과 후속 공식 정리입니다.
+- 현재 다음 승인 단위는 `MobEffect-based buff/debuff effect integration` 입니다.
+- 다음 후보는 `debuff / utility effect / effect stacking semantics` 축입니다.
 - support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
 - selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
-- 그 다음 핵심 작업은 `Ailment system` 입니다.
 - 선행 기반은 준비되어 있습니다.
   - `Item affix foundation`
   - `Item affix classification`

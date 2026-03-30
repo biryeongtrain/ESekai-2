@@ -9,6 +9,9 @@ import com.mojang.serialization.DataResult;
 public enum SkillActionType {
     SOUND("sound"),
     DAMAGE("damage"),
+    APPLY_BUFF("apply_buff"),
+    APPLY_AILMENT("apply_ailment"),
+    APPLY_DOT("apply_dot"),
     PROJECTILE("projectile"),
     SUMMON_AT_SIGHT("summon_at_sight"),
     SUMMON_BLOCK("summon_block"),

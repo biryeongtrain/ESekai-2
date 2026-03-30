@@ -7,6 +7,9 @@ import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
 import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
@@ -17,6 +20,7 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
+import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
 import kim.biryeong.esekai2.impl.skill.entity.SkillAnchoredEntity;
 import kim.biryeong.esekai2.impl.skill.entity.SkillProjectileEntity;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
@@ -30,6 +34,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -37,8 +43,10 @@ import org.joml.Vector2f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Default server-side world hooks for skill execution.
@@ -48,6 +56,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
     private static final float DEFAULT_PROJECTILE_SPEED = 1.2F;
 
     private ServerSkillExecutionHooks() {
+        SkillDotRuntimeManager.bootstrap();
     }
 
     @Override
@@ -93,6 +102,111 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         }
 
         return Optional.ofNullable(lastResult);
+    }
+
+    @Override
+    public boolean applyBuff(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedApplyBuffAction action
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+
+        if (action.durationTicks() <= 0) {
+            return false;
+        }
+
+        MobEffect effect = BuiltInRegistries.MOB_EFFECT.getOptional(action.effectId()).orElse(null);
+        if (effect == null) {
+            return false;
+        }
+
+        boolean applied = false;
+        for (Entity target : targets) {
+            if (!(target instanceof LivingEntity livingTarget)) {
+                continue;
+            }
+
+            MobEffectInstance effectInstance = new MobEffectInstance(
+                    BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect),
+                    action.durationTicks(),
+                    action.amplifier(),
+                    action.ambient(),
+                    action.showParticles(),
+                    action.showIcon()
+            );
+            applied |= livingTarget.addEffect(effectInstance);
+        }
+        return applied;
+    }
+
+    @Override
+    public boolean applyDamageOverTime(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedApplyDotAction action
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+
+        if (action.durationTicks() <= 0 || action.tickIntervalTicks() <= 0) {
+            return false;
+        }
+
+        boolean applied = false;
+        for (Entity target : targets) {
+            if (!(target instanceof LivingEntity livingTarget)) {
+                continue;
+            }
+            applied |= SkillDotRuntimeManager.registerOrRefresh(livingTarget, context, action);
+        }
+        return applied;
+    }
+
+    @Override
+    public boolean applyAilment(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedApplyAilmentAction action,
+            Map<UUID, DamageCalculationResult> latestDamageResults
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+        Objects.requireNonNull(latestDamageResults, "latestDamageResults");
+
+        if (action.durationTicks() <= 0 || action.chancePercent() <= 0.0) {
+            return false;
+        }
+        if (context.preparedUse().useContext().hitRoll() >= action.chancePercent() / 100.0) {
+            return false;
+        }
+
+        boolean applied = false;
+        for (Entity target : targets) {
+            if (!(target instanceof LivingEntity livingTarget)) {
+                continue;
+            }
+
+            DamageCalculationResult hitResult = latestDamageResults.get(livingTarget.getUUID());
+            if (hitResult == null || hitResult.finalDamage().totalAmount() <= 0.0) {
+                continue;
+            }
+
+            applied |= AilmentRuntime.apply(
+                    livingTarget,
+                    context.source(),
+                    context.preparedUse().skill().identifier(),
+                    action.ailmentType(),
+                    hitResult,
+                    action.durationTicks(),
+                    action.potencyMultiplierPercent()
+            );
+        }
+        return applied;
     }
 
     @Override
@@ -261,10 +375,11 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
             LivingEntity target,
             PreparedDamageAction action
     ) {
-        return MonsterStats.resolveBaseHolder(target)
+        StatHolder base = MonsterStats.resolveBaseHolder(target)
                 .orElse(action.hitDamageCalculation().defenderStats() != null
                         ? action.hitDamageCalculation().defenderStats()
                         : StatHolders.create(StatRegistryAccess.statRegistry(context.level().getServer())));
+        return AilmentRuntime.resolveDefenderStats(context.level(), target, base);
     }
 
     private static DamageSource resolveDamageSource(SkillExecutionContext context, PreparedDamageAction action) {

@@ -1,0 +1,43 @@
+{
+  "identifier": "esekai2:kindling_inferno",
+  "config": {
+    "resource_cost": 6.0,
+    "cast_time_ticks": 12,
+    "cooldown_ticks": 0,
+    "tags": [
+      "attack",
+      "melee"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:item.firecharge.use"
+          },
+          {
+            "type": "damage",
+            "base_damage": {
+              "physical": 10.0
+            }
+          },
+          {
+            "type": "apply_ailment",
+            "ailment_id": "ignite",
+            "chance": 100.0,
+            "duration_ticks": 8,
+            "potency_multiplier": 200.0
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "identifier": "esekai2:searing_brand",
+  "config": {
+    "resource_cost": 6.0,
+    "cast_time_ticks": 10,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:item.firecharge.use"
+          },
+          {
+            "type": "apply_dot",
+            "dot_id": "searing_brand",
+            "base_damage": {
+              "physical": 2.0
+            },
+            "duration_ticks": 8,
+            "tick_interval": 2
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}
