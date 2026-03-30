@@ -1,0 +1,26 @@
+{
+  "identifier": "esekai2:support_toxic_cleanse",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "action_parameter_overrides": [
+        {
+          "action_type": "remove_effect",
+          "field_overrides": [
+            {
+              "path": {
+                "type": "parameter",
+                "parameter_key": "effect_id"
+              },
+              "value": "esekai2:poison"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

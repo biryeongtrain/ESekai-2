@@ -1,5 +1,7 @@
 package kim.biryeong.esekai2.impl.item.socket;
 
+import eu.pb4.polymer.core.api.other.PolymerComponent;
+
 /**
  * Forces eager initialization of socket data components.
  */
@@ -13,7 +15,7 @@ public final class SocketItemBootstrap {
         if (bootstrapped) {
             return;
         }
-        SocketItemComponents.SOCKETED_ITEM_STATE.toString();
+        PolymerComponent.registerDataComponent(SocketItemComponents.SOCKETED_ITEM_STATE);
         bootstrapped = true;
     }
 }

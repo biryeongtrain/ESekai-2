@@ -1,0 +1,26 @@
+{
+  "identifier": "esekai2:support_quick_focus",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "action_parameter_overrides": [
+        {
+          "action_type": "apply_effect",
+          "field_overrides": [
+            {
+              "path": {
+                "type": "parameter",
+                "parameter_key": "duration_ticks"
+              },
+              "value": "12.0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

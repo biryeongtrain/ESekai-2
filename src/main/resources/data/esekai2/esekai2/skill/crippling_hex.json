@@ -1,0 +1,39 @@
+{
+  "identifier": "esekai2:crippling_hex",
+  "config": {
+    "resource_cost": 5.0,
+    "cast_time_ticks": 10,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.enchantment_table.use"
+          },
+          {
+            "type": "apply_effect",
+            "effect_id": "minecraft:slowness",
+            "duration_ticks": 10,
+            "amplifier": 0,
+            "refresh_policy": "add_duration",
+            "ambient": false,
+            "show_particles": true,
+            "show_icon": true
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

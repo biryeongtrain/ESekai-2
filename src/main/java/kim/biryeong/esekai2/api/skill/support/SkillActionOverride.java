@@ -87,7 +87,7 @@ public record SkillActionOverride(
      */
     public boolean matches(SkillAction action) {
         Objects.requireNonNull(action, "action");
-        if (action.type() != actionType) {
+        if (action.type() != actionType && !(action.type().isMobEffectAction() && actionType.isMobEffectAction())) {
             return false;
         }
         if (matchingCalculationId.isBlank()) {

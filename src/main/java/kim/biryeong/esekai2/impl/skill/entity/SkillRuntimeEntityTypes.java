@@ -1,5 +1,6 @@
 package kim.biryeong.esekai2.impl.skill.entity;
 
+import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import kim.biryeong.esekai2.Esekai2;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.core.Registry;
@@ -48,8 +49,7 @@ public final class SkillRuntimeEntityTypes {
             return;
         }
 
-        PROJECTILE.toString();
-        ANCHORED.toString();
+        PolymerEntityUtils.registerType(PROJECTILE, ANCHORED);
         bootstrapped = true;
     }
 

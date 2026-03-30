@@ -12,6 +12,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
@@ -105,7 +106,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
     }
 
     @Override
-    public boolean applyBuff(
+    public boolean applyEffect(
             SkillExecutionContext context,
             List<Entity> targets,
             PreparedApplyBuffAction action
@@ -129,17 +130,103 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
                 continue;
             }
 
-            MobEffectInstance effectInstance = new MobEffectInstance(
-                    BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect),
-                    action.durationTicks(),
-                    action.amplifier(),
-                    action.ambient(),
-                    action.showParticles(),
-                    action.showIcon()
-            );
+            MobEffectInstance effectInstance = resolveEffectInstance(livingTarget, effect, action);
+            if (effectInstance == null) {
+                continue;
+            }
+
+            livingTarget.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
             applied |= livingTarget.addEffect(effectInstance);
         }
         return applied;
+    }
+
+    @Override
+    public boolean removeEffect(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedRemoveEffectAction action
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+
+        MobEffect effect = BuiltInRegistries.MOB_EFFECT.getOptional(action.effectId()).orElse(null);
+        if (effect == null) {
+            return false;
+        }
+
+        boolean removed = false;
+        for (Entity target : targets) {
+            if (!(target instanceof LivingEntity livingTarget)) {
+                continue;
+            }
+
+            if (AilmentRuntime.remove(livingTarget, action.effectId())) {
+                removed = true;
+                continue;
+            }
+
+            if (livingTarget.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)) == null) {
+                continue;
+            }
+
+            livingTarget.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
+            removed = true;
+        }
+        return removed;
+    }
+
+    private static MobEffectInstance resolveEffectInstance(
+            LivingEntity target,
+            MobEffect effect,
+            PreparedApplyBuffAction action
+    ) {
+        MobEffectInstance existing = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
+        if (existing == null) {
+            return createEffectInstance(effect, action.durationTicks(), action.amplifier(), action);
+        }
+
+        return switch (action.refreshPolicy()) {
+            case OVERWRITE -> createEffectInstance(effect, action.durationTicks(), action.amplifier(), action);
+            case ADD_DURATION -> createEffectInstance(
+                    effect,
+                    existing.getDuration() + action.durationTicks(),
+                    Math.max(existing.getAmplifier(), action.amplifier()),
+                    action
+            );
+            case LONGER_ONLY -> resolveLongerOnlyInstance(effect, existing, action);
+        };
+    }
+
+    private static MobEffectInstance resolveLongerOnlyInstance(
+            MobEffect effect,
+            MobEffectInstance existing,
+            PreparedApplyBuffAction action
+    ) {
+        if (existing.getAmplifier() > action.amplifier()) {
+            return null;
+        }
+        if (existing.getAmplifier() == action.amplifier() && existing.getDuration() >= action.durationTicks()) {
+            return null;
+        }
+        return createEffectInstance(effect, action.durationTicks(), action.amplifier(), action);
+    }
+
+    private static MobEffectInstance createEffectInstance(
+            MobEffect effect,
+            int durationTicks,
+            int amplifier,
+            PreparedApplyBuffAction action
+    ) {
+        return new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect),
+                durationTicks,
+                amplifier,
+                action.ambient(),
+                action.showParticles(),
+                action.showIcon()
+        );
     }
 
     @Override

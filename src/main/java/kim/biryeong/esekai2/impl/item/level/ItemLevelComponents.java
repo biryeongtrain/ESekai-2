@@ -1,6 +1,11 @@
 package kim.biryeong.esekai2.impl.item.level;
 
 import com.mojang.serialization.Codec;
+import eu.pb4.polymer.common.api.PolymerCommonUtils;
+import eu.pb4.polymer.core.api.item.PolymerItemUtils;
+import eu.pb4.polymer.core.api.other.PolymerComponent;
+import eu.pb4.polymer.core.impl.other.PolymerComponentImpl;
+import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import kim.biryeong.esekai2.api.level.LevelRules;
 import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
@@ -24,4 +29,5 @@ public final class ItemLevelComponents {
 
     private ItemLevelComponents() {
     }
+
 }

@@ -15,6 +15,7 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillCondition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillConditionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateSubject;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetSelector;
@@ -41,8 +42,10 @@ import kim.biryeong.esekai2.impl.skill.registry.SkillCalculationRegistryAccess;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -114,6 +117,10 @@ public final class SkillExecutionGameTests {
     public void skillConditionAndPredicateCodecRoundTrips(GameTestHelper helper) {
         SkillCondition condition = new SkillCondition(SkillConditionType.X_TICKS_CONDITION, Map.of("tick_rate", "2"));
         SkillPredicate predicate = new SkillPredicate(SkillPredicateType.RANDOM_CHANCE, Map.of("chance", "0.5"));
+        SkillPredicate hasEffectPredicate = new SkillPredicate(
+                SkillPredicateType.HAS_EFFECT,
+                Map.of("effect_id", "minecraft:speed", "subject", "self")
+        );
 
         SkillCondition decodedCondition = SkillCondition.CODEC.parse(
                 JsonOps.INSTANCE,
@@ -126,10 +133,49 @@ public final class SkillExecutionGameTests {
                 SkillPredicate.CODEC.encodeStart(JsonOps.INSTANCE, predicate)
                         .getOrThrow(message -> new IllegalStateException("Failed to encode skill predicate: " + message))
         ).getOrThrow(message -> new IllegalStateException("Failed to decode skill predicate: " + message));
+        SkillPredicate decodedHasEffectPredicate = SkillPredicate.CODEC.parse(
+                JsonOps.INSTANCE,
+                SkillPredicate.CODEC.encodeStart(JsonOps.INSTANCE, hasEffectPredicate)
+                        .getOrThrow(message -> new IllegalStateException("Failed to encode has_effect predicate: " + message))
+        ).getOrThrow(message -> new IllegalStateException("Failed to decode has_effect predicate: " + message));
 
         helper.assertValueEqual(decodedCondition, condition, "Skill condition codec should preserve x-tick payloads");
         helper.assertValueEqual(decodedPredicate, predicate, "Skill predicate codec should preserve random chance payloads");
+        helper.assertValueEqual(decodedHasEffectPredicate, hasEffectPredicate, "Skill predicate codec should preserve has_effect payloads");
         helper.succeed();
+    }
+
+    /**
+     * Verifies that has_effect predicates reject invalid effect identifiers during codec validation.
+     */
+    @GameTest
+    public void hasEffectPredicateRejectsInvalidEffectId(GameTestHelper helper) {
+        try {
+            SkillPredicate.CODEC.parse(JsonOps.INSTANCE, JsonOps.INSTANCE.createMap(Map.of(
+                    JsonOps.INSTANCE.createString("type"), JsonOps.INSTANCE.createString("has_effect"),
+                    JsonOps.INSTANCE.createString("effect_id"), JsonOps.INSTANCE.createString("not a valid id")
+            ))).getOrThrow(message -> new IllegalStateException("Expected has_effect validation to fail: " + message));
+            throw helper.assertionException("has_effect predicates should reject invalid effect ids");
+        } catch (IllegalStateException expected) {
+            helper.succeed();
+        }
+    }
+
+    /**
+     * Verifies that has_effect predicates reject invalid subject values during codec validation.
+     */
+    @GameTest
+    public void hasEffectPredicateRejectsInvalidSubject(GameTestHelper helper) {
+        try {
+            SkillPredicate.CODEC.parse(JsonOps.INSTANCE, JsonOps.INSTANCE.createMap(Map.of(
+                    JsonOps.INSTANCE.createString("type"), JsonOps.INSTANCE.createString("has_effect"),
+                    JsonOps.INSTANCE.createString("effect_id"), JsonOps.INSTANCE.createString("minecraft:speed"),
+                    JsonOps.INSTANCE.createString("subject"), JsonOps.INSTANCE.createString("not_a_subject")
+            ))).getOrThrow(message -> new IllegalStateException("Expected has_effect subject validation to fail: " + message));
+            throw helper.assertionException("has_effect predicates should reject invalid subjects");
+        } catch (IllegalStateException expected) {
+            helper.succeed();
+        }
     }
 
     /**
@@ -708,6 +754,134 @@ public final class SkillExecutionGameTests {
         helper.assertValueEqual(passing.executedActions(), 1, "Low prepared hit rolls should pass RANDOM_CHANCE predicates");
         helper.assertValueEqual(failing.executedActions(), 0, "High prepared hit rolls should fail RANDOM_CHANCE predicates");
         helper.assertValueEqual(failing.skippedActions(), 1, "Failed random chance routes should be counted as skipped");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that has_effect predicates can gate routes using the current primary target's active effects.
+     */
+    @GameTest
+    public void hasEffectEnPredUsesPrimaryTargetEffect(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_primary_target_predicate",
+                List.of(),
+                Map.of(
+                        "spell_cast_component",
+                        List.of(new SkillRule(
+                                Set.of(new SkillTargetSelector(SkillTargetType.TARGET, Map.of())),
+                                List.of(soundAction("minecraft:block.anvil.land")),
+                                List.of(new SkillCondition(SkillConditionType.ON_SPELL_CAST, Map.of())),
+                                List.of(new SkillPredicate(
+                                        SkillPredicateType.HAS_EFFECT,
+                                        Map.of("effect_id", "minecraft:slowness")
+                                ))
+                        ))
+                )
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(1.0, 2.0, 4.0));
+
+        SkillExecutionResult withoutEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        zombie.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(
+                        BuiltInRegistries.MOB_EFFECT.getOptional(Identifier.fromNamespaceAndPath("minecraft", "slowness"))
+                                .orElseThrow(() -> helper.assertionException("Slowness should exist"))
+                ),
+                80,
+                0
+        ));
+
+        SkillExecutionResult withEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(withoutEffect.executedActions(), 0, "has_effect should block the route when the primary target lacks the effect");
+        helper.assertValueEqual(withEffect.executedActions(), 1, "has_effect should allow the route when the primary target has the effect");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that has_effect predicates can inspect the source entity when subject is self.
+     */
+    @GameTest
+    public void hasEffectEnPredUsesSelfSubject(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_self_predicate",
+                List.of(new SkillRule(
+                        Set.of(new SkillTargetSelector(SkillTargetType.SELF, Map.of())),
+                        List.of(soundAction("minecraft:block.note_block.bell")),
+                        List.of(),
+                        List.of(new SkillPredicate(
+                                SkillPredicateType.HAS_EFFECT,
+                                Map.of("effect_id", "minecraft:speed", "subject", "self")
+                        ))
+                )),
+                Map.of()
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        SkillExecutionResult withoutEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(
+                        BuiltInRegistries.MOB_EFFECT.getOptional(Identifier.fromNamespaceAndPath("minecraft", "speed"))
+                                .orElseThrow(() -> helper.assertionException("Speed should exist"))
+                ),
+                80,
+                0
+        ));
+
+        SkillExecutionResult withEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(withoutEffect.executedActions(), 0, "Self has_effect should block when the caster lacks the effect");
+        helper.assertValueEqual(withEffect.executedActions(), 1, "Self has_effect should pass when the caster has the effect");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that has_effect predicates can match built-in ailment effect identities.
+     */
+    @GameTest
+    public void hasEffectEnPredMatchesBuiltInAilmentEffectIdentity(GameTestHelper helper) {
+        SkillPredicate predicate = SkillPredicate.hasEffect(Identifier.fromNamespaceAndPath("esekai2", "poison"), SkillPredicateSubject.SELF);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                testSkill("esekai2:test_has_effect_ailment_identity", List.of(), Map.of()),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        SkillExecutionContext contextWithoutEffect = SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty());
+        helper.assertTrue(!predicate.matches(contextWithoutEffect), "Poison has_effect should fail when the caster lacks the ailment identity");
+
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(
+                        BuiltInRegistries.MOB_EFFECT.getOptional(Identifier.fromNamespaceAndPath("esekai2", "poison"))
+                                .orElseThrow(() -> helper.assertionException("Poison effect should exist"))
+                ),
+                80,
+                0
+        ));
+
+        SkillExecutionContext contextWithEffect = SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty());
+        helper.assertTrue(predicate.matches(contextWithEffect), "Poison has_effect should pass when the caster has the built-in ailment identity");
         helper.succeed();
     }
 

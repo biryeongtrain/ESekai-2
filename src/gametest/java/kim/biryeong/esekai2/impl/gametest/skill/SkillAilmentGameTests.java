@@ -5,6 +5,15 @@ import kim.biryeong.esekai2.api.ailment.AilmentPayload;
 import kim.biryeong.esekai2.api.ailment.AilmentState;
 import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.ailment.Ailments;
+import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
+import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
+import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
+import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
+import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeCalculation;
+import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeResult;
+import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
+import kim.biryeong.esekai2.api.damage.critical.HitContext;
+import kim.biryeong.esekai2.api.damage.critical.HitKind;
 import kim.biryeong.esekai2.api.item.socket.SocketLinkGroup;
 import kim.biryeong.esekai2.api.item.socket.SocketSlotType;
 import kim.biryeong.esekai2.api.item.socket.SocketedEquipmentSlot;
@@ -19,6 +28,8 @@ import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationLookup;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillRegistries;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
 import kim.biryeong.esekai2.api.skill.execution.SelectedSkillUseResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
@@ -26,9 +37,11 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
+import kim.biryeong.esekai2.api.stat.combat.CombatStats;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.api.stat.modifier.ConditionalStatModifier;
+import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
 import kim.biryeong.esekai2.impl.skill.registry.SkillCalculationRegistryAccess;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -118,7 +131,7 @@ public final class SkillAilmentGameTests {
     @GameTest
     public void igniteAppliesAttachmentBackedEffectAndTicks(GameTestHelper helper) {
         Player caster = helper.makeMockPlayer(GameType.CREATIVE);
-        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(3.0, 2.0, 3.0));
         PreparedSkillUse prepared = Skills.prepareUse(
                 kindlingStrike(helper),
                 skillUseContext(
@@ -134,7 +147,6 @@ public final class SkillAilmentGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
         );
 
-        float initialHealth = zombie.getHealth();
         helper.assertValueEqual(result.executedActions(), 3, "Kindling strike should execute sound, damage, and ailment actions");
         helper.assertTrue(
                 zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
@@ -142,17 +154,23 @@ public final class SkillAilmentGameTests {
         );
         helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isPresent(),
                 "Ignite should also store an attachment payload on the target");
-        helper.runAfterDelay(3, () ->
-                helper.assertTrue(zombie.getHealth() < initialHealth, "Ignite should deal periodic damage shortly after the hit")
-        );
-        float[] settledHealth = new float[1];
-        helper.runAfterDelay(10, () -> settledHealth[0] = zombie.getHealth());
-        helper.runAfterDelay(14, () -> {
-            helper.assertValueEqual(zombie.getHealth(), settledHealth[0], "Ignite should stop dealing damage after its duration expires");
-            helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isEmpty(),
-                    "Expired ignite should clear its attachment payload");
-            helper.succeed();
-        });
+        helper.assertTrue(!AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
+                "Ignite should not deal damage on the first runtime tick");
+        zombie.invulnerableTime = 0;
+        helper.assertTrue(AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
+                "Ignite should deal periodic damage on its next interval tick");
+        for (int tick = 0; tick < 6; tick++) {
+            AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE);
+        }
+        float settledHealth = zombie.getHealth();
+        helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isEmpty(),
+                "Expired ignite should clear its attachment payload");
+        helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
+                "Expired ignite should clear its MobEffect identity");
+        helper.assertTrue(!AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
+                "Expired ignite should stop producing periodic damage");
+        helper.assertValueEqual(zombie.getHealth(), settledHealth, "Expired ignite should stop dealing damage after its duration expires");
+        helper.succeed();
     }
 
     /**
@@ -226,8 +244,8 @@ public final class SkillAilmentGameTests {
     @GameTest
     public void shockAmplifiesSubsequentHitDamage(GameTestHelper helper) {
         Player caster = helper.makeMockPlayer(GameType.CREATIVE);
-        LivingEntity shockedTarget = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
-        LivingEntity controlTarget = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(5.0, 2.0, 3.0));
+        LivingEntity shockedTarget = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(3.0, 2.0, 3.0));
+        LivingEntity controlTarget = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(5.0, 2.0, 3.0));
         PreparedSkillUse shockPrepared = Skills.prepareUse(
                 thunderStrike(helper),
                 skillUseContext(helper, newHolder(helper), MonsterStats.resolveBaseHolder(shockedTarget).orElse(newHolder(helper)), 0.0, 0.99)
@@ -240,15 +258,24 @@ public final class SkillAilmentGameTests {
         Skills.executeOnCast(SkillExecutionContext.forCast(shockPrepared, helper.getLevel(), caster, Optional.of(shockedTarget)));
         helper.assertTrue(Ailments.get(shockedTarget).flatMap(state -> state.get(AilmentType.SHOCK)).isPresent(),
                 "Shock should store an attachment payload");
+        PreparedDamageAction hitAction = (PreparedDamageAction) hitPrepared.onCastActions().stream()
+                .filter(PreparedDamageAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Basic strike should prepare one damage action"));
 
-        float shockedBefore = shockedTarget.getHealth();
-        float controlBefore = controlTarget.getHealth();
-        Skills.executeOnCast(SkillExecutionContext.forCast(hitPrepared, helper.getLevel(), caster, Optional.of(shockedTarget)));
-        Skills.executeOnCast(SkillExecutionContext.forCast(hitPrepared, helper.getLevel(), caster, Optional.of(controlTarget)));
+        DamageCalculationResult shockedResult = DamageCalculations.calculateHit(copyHitCalculation(
+                hitAction.hitDamageCalculation(),
+                AilmentRuntime.resolveDefenderStats(helper.getLevel(), shockedTarget, hitAction.hitDamageCalculation().defenderStats())
+        ));
+        DamageCalculationResult controlResult = DamageCalculations.calculateHit(copyHitCalculation(
+                hitAction.hitDamageCalculation(),
+                AilmentRuntime.resolveDefenderStats(helper.getLevel(), controlTarget, hitAction.hitDamageCalculation().defenderStats())
+        ));
 
-        float shockedLoss = shockedBefore - shockedTarget.getHealth();
-        float controlLoss = controlBefore - controlTarget.getHealth();
-        helper.assertTrue(shockedLoss > controlLoss, "A shocked target should take more damage from subsequent hits");
+        helper.assertTrue(
+                shockedResult.finalDamage().totalAmount() > controlResult.finalDamage().totalAmount(),
+                "A shocked target should take more damage from subsequent hits"
+        );
         helper.succeed();
     }
 
@@ -258,8 +285,8 @@ public final class SkillAilmentGameTests {
     @GameTest
     public void shockAmplifiesGenericDotDamage(GameTestHelper helper) {
         Player caster = helper.makeMockPlayer(GameType.CREATIVE);
-        LivingEntity shockedTarget = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
-        LivingEntity controlTarget = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(5.0, 2.0, 3.0));
+        LivingEntity shockedTarget = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(3.0, 2.0, 3.0));
+        LivingEntity controlTarget = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(5.0, 2.0, 3.0));
         PreparedSkillUse shockPrepared = Skills.prepareUse(
                 thunderStrike(helper),
                 skillUseContext(helper, newHolder(helper), MonsterStats.resolveBaseHolder(shockedTarget).orElse(newHolder(helper)), 0.0, 0.99)
@@ -270,17 +297,25 @@ public final class SkillAilmentGameTests {
         );
 
         Skills.executeOnCast(SkillExecutionContext.forCast(shockPrepared, helper.getLevel(), caster, Optional.of(shockedTarget)));
-        float shockedBefore = shockedTarget.getHealth();
-        float controlBefore = controlTarget.getHealth();
-        Skills.executeOnCast(SkillExecutionContext.forCast(dotPrepared, helper.getLevel(), caster, Optional.of(shockedTarget)));
-        Skills.executeOnCast(SkillExecutionContext.forCast(dotPrepared, helper.getLevel(), caster, Optional.of(controlTarget)));
+        PreparedApplyDotAction dotAction = (PreparedApplyDotAction) dotPrepared.onCastActions().stream()
+                .filter(PreparedApplyDotAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Searing brand should prepare one apply_dot action"));
 
-        helper.runAfterDelay(3, () -> {
-            float shockedLoss = shockedBefore - shockedTarget.getHealth();
-            float controlLoss = controlBefore - controlTarget.getHealth();
-            helper.assertTrue(shockedLoss > controlLoss, "Shock should amplify generic skill-owned DoT damage as well");
-            helper.succeed();
-        });
+        DamageOverTimeResult shockedResult = DamageCalculations.calculateDamageOverTime(copyDotCalculation(
+                dotAction.damageCalculation(),
+                AilmentRuntime.resolveDefenderStats(helper.getLevel(), shockedTarget, dotAction.damageCalculation().defenderStats())
+        ));
+        DamageOverTimeResult controlResult = DamageCalculations.calculateDamageOverTime(copyDotCalculation(
+                dotAction.damageCalculation(),
+                AilmentRuntime.resolveDefenderStats(helper.getLevel(), controlTarget, dotAction.damageCalculation().defenderStats())
+        ));
+
+        helper.assertTrue(
+                shockedResult.finalDamage().totalAmount() > controlResult.finalDamage().totalAmount(),
+                "Shock should amplify generic skill-owned DoT damage as well"
+        );
+        helper.succeed();
     }
 
     /**
@@ -387,6 +422,31 @@ public final class SkillAilmentGameTests {
         return Ailments.get(entity)
                 .flatMap(state -> state.get(type))
                 .orElseThrow(() -> helper.assertionException(type.serializedName() + " payload should exist on the target"));
+    }
+
+    private static HitDamageCalculation copyHitCalculation(HitDamageCalculation source, StatHolder defenderStats) {
+        return new HitDamageCalculation(
+                source.baseDamage(),
+                source.conversions(),
+                source.extraGains(),
+                source.scaling(),
+                source.exposures(),
+                source.penetrations(),
+                source.attackerStats(),
+                source.hitContext(),
+                defenderStats
+        );
+    }
+
+    private static DamageOverTimeCalculation copyDotCalculation(DamageOverTimeCalculation source, StatHolder defenderStats) {
+        return new DamageOverTimeCalculation(
+                source.baseDamage(),
+                source.conversions(),
+                source.extraGains(),
+                source.scaling(),
+                source.exposures(),
+                defenderStats
+        );
     }
 
     private static MobEffect effect(AilmentType type) {

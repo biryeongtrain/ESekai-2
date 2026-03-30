@@ -9,6 +9,7 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldOverride;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldPathType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
+import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
 import kim.biryeong.esekai2.api.skill.support.SkillActionOverride;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
@@ -176,6 +177,7 @@ public final class SkillSupportMerger {
         boolean ambient = action.ambient();
         boolean showParticles = action.showParticles();
         boolean showIcon = action.showIcon();
+        MobEffectRefreshPolicy refreshPolicy = action.refreshPolicy();
         String anchor = action.anchor();
         SkillValueExpression offsetX = action.offsetX();
         SkillValueExpression offsetY = action.offsetY();
@@ -239,6 +241,8 @@ public final class SkillSupportMerger {
                 showParticles = Boolean.parseBoolean(fieldOverride.value());
             } else if (key.equals("show_icon")) {
                 showIcon = Boolean.parseBoolean(fieldOverride.value());
+            } else if (key.equals("refresh_policy")) {
+                refreshPolicy = parseRefreshPolicy(fieldOverride.value());
             } else if (key.equals("anchor")) {
                 anchor = fieldOverride.value();
             } else if (key.equals("offset_x")) {
@@ -277,6 +281,7 @@ public final class SkillSupportMerger {
                 ambient,
                 showParticles,
                 showIcon,
+                refreshPolicy,
                 anchor,
                 offsetX,
                 offsetY,
@@ -307,6 +312,19 @@ public final class SkillSupportMerger {
             }
         }
         return HitKind.ATTACK;
+    }
+
+    private static MobEffectRefreshPolicy parseRefreshPolicy(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return MobEffectRefreshPolicy.OVERWRITE;
+        }
+
+        for (MobEffectRefreshPolicy policy : MobEffectRefreshPolicy.values()) {
+            if (policy.serializedName().equals(raw)) {
+                return policy;
+            }
+        }
+        return MobEffectRefreshPolicy.OVERWRITE;
     }
 
     private static DamageType parseDamageType(String rawType) {

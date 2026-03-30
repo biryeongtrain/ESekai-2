@@ -6,6 +6,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
@@ -26,7 +27,15 @@ public interface SkillExecutionHooks {
 
     Optional<DamageCalculationResult> applyDamage(SkillExecutionContext context, List<Entity> targets, PreparedDamageAction action);
 
+    default boolean applyEffect(SkillExecutionContext context, List<Entity> targets, PreparedApplyBuffAction action) {
+        return false;
+    }
+
     default boolean applyBuff(SkillExecutionContext context, List<Entity> targets, PreparedApplyBuffAction action) {
+        return applyEffect(context, targets, action);
+    }
+
+    default boolean removeEffect(SkillExecutionContext context, List<Entity> targets, PreparedRemoveEffectAction action) {
         return false;
     }
 
@@ -63,7 +72,8 @@ public interface SkillExecutionHooks {
         return switch (action.actionType()) {
             case "sound" -> playSound(context, targets, (PreparedSoundAction) action);
             case "damage" -> applyDamage(context, targets, (PreparedDamageAction) action).isPresent();
-            case "apply_buff" -> applyBuff(context, targets, (PreparedApplyBuffAction) action);
+            case "apply_effect", "apply_buff" -> applyBuff(context, targets, (PreparedApplyBuffAction) action);
+            case "remove_effect" -> removeEffect(context, targets, (PreparedRemoveEffectAction) action);
             case "apply_dot" -> applyDamageOverTime(context, targets, (PreparedApplyDotAction) action);
             case "apply_ailment" -> applyAilment(context, targets, (PreparedApplyAilmentAction) action, Map.of());
             case "projectile" -> spawnProjectile(context, targets, (PreparedProjectileAction) action).isPresent();

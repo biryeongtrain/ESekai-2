@@ -9,7 +9,9 @@ import com.mojang.serialization.DataResult;
 public enum SkillActionType {
     SOUND("sound"),
     DAMAGE("damage"),
+    APPLY_EFFECT("apply_effect"),
     APPLY_BUFF("apply_buff"),
+    REMOVE_EFFECT("remove_effect"),
     APPLY_AILMENT("apply_ailment"),
     APPLY_DOT("apply_dot"),
     PROJECTILE("projectile"),
@@ -35,6 +37,15 @@ public enum SkillActionType {
      */
     public String serializedName() {
         return serializedName;
+    }
+
+    /**
+     * Returns whether this action uses the shared MobEffect application payload.
+     *
+     * @return {@code true} for `apply_effect` and legacy `apply_buff`
+     */
+    public boolean isMobEffectAction() {
+        return this == APPLY_EFFECT || this == APPLY_BUFF;
     }
 
     private static DataResult<SkillActionType> bySerializedName(String serializedName) {

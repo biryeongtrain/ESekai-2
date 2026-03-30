@@ -20,6 +20,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillExecutionRoute;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
@@ -222,7 +223,8 @@ public final class SkillHitPreparationCalculator {
         return switch (type) {
             case SOUND -> parseSound(action, context, warnings);
             case DAMAGE -> parseDamage(action, context, warnings);
-            case APPLY_BUFF -> parseApplyBuff(action, context, warnings);
+            case APPLY_EFFECT, APPLY_BUFF -> parseApplyBuff(action, context, warnings);
+            case REMOVE_EFFECT -> parseRemoveEffect(action, warnings);
             case APPLY_AILMENT -> parseApplyAilment(action, context, warnings);
             case APPLY_DOT -> parseApplyDot(action, context, warnings);
             case PROJECTILE -> parseProjectile(action, context, warnings);
@@ -300,13 +302,13 @@ public final class SkillHitPreparationCalculator {
     ) {
         Identifier effectId = parseIdentifier(action.effectId());
         if (effectId == null) {
-            warnings.add("apply_buff action requires a valid effect_id");
+            warnings.add("MobEffect action requires a valid effect_id");
             return null;
         }
 
         int durationTicks = resolveInt(action.durationTicks(), context, 0);
         if (durationTicks <= 0) {
-            warnings.add("apply_buff action requires duration_ticks > 0");
+            warnings.add("MobEffect action requires duration_ticks > 0");
             return null;
         }
 
@@ -318,6 +320,8 @@ public final class SkillHitPreparationCalculator {
                 action.ambient(),
                 action.showParticles(),
                 action.showIcon(),
+                action.type().serializedName(),
+                action.refreshPolicy(),
                 action.enPreds()
         );
     }
@@ -365,6 +369,16 @@ public final class SkillHitPreparationCalculator {
                 tickIntervalTicks,
                 action.enPreds()
         );
+    }
+
+    private static PreparedRemoveEffectAction parseRemoveEffect(SkillAction action, List<String> warnings) {
+        Identifier effectId = parseIdentifier(action.effectId());
+        if (effectId == null) {
+            warnings.add("remove_effect action requires a valid effect_id");
+            return null;
+        }
+
+        return new PreparedRemoveEffectAction(effectId, action.type().serializedName(), action.enPreds());
     }
 
     private static PreparedApplyAilmentAction parseApplyAilment(

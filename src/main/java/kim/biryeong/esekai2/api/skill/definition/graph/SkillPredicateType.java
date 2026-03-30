@@ -9,7 +9,8 @@ import com.mojang.serialization.DataResult;
 public enum SkillPredicateType {
     ALWAYS("always"),
     RANDOM_CHANCE("random_chance"),
-    HAS_TARGET("has_target");
+    HAS_TARGET("has_target"),
+    HAS_EFFECT("has_effect");
 
     public static final Codec<SkillPredicateType> CODEC = Codec.STRING.comapFlatMap(
             SkillPredicateType::bySerializedName,

@@ -1,0 +1,33 @@
+{
+  "identifier": "esekai2:purging_hex",
+  "config": {
+    "resource_cost": 6.0,
+    "cast_time_ticks": 10,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.respawn_anchor.deplete"
+          },
+          {
+            "type": "remove_effect",
+            "effect_id": "minecraft:slowness"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

@@ -123,6 +123,35 @@ public final class AilmentRuntime {
                 .orElse(0.0);
     }
 
+    public static boolean remove(LivingEntity entity, AilmentType type) {
+        Objects.requireNonNull(entity, "entity");
+        Objects.requireNonNull(type, "type");
+
+        boolean hadPayload = AilmentBootstrap.get(entity)
+                .flatMap(state -> state.get(type))
+                .isPresent();
+        boolean hadEffectIdentity = entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(AilmentBootstrap.effect(type))) != null;
+        if (!hadPayload && !hadEffectIdentity) {
+            return false;
+        }
+
+        AilmentState updated = AilmentBootstrap.get(entity).orElse(AilmentState.EMPTY).without(type);
+        AilmentBootstrap.attach(entity, updated);
+        removeEffectIdentity(entity, type);
+        return true;
+    }
+
+    public static boolean remove(LivingEntity entity, Identifier effectId) {
+        Objects.requireNonNull(entity, "entity");
+        Objects.requireNonNull(effectId, "effectId");
+
+        AilmentType type = ailmentType(effectId);
+        if (type == null) {
+            return false;
+        }
+        return remove(entity, type);
+    }
+
     public static StatHolder resolveDefenderStats(ServerLevel level, LivingEntity target, StatHolder fallback) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(target, "target");
@@ -142,7 +171,7 @@ public final class AilmentRuntime {
         }
         copy.addModifier(new StatModifier(
                 CombatStats.DAMAGE_TAKEN_MORE,
-                StatModifierOperation.MORE,
+                StatModifierOperation.ADD,
                 shockMore,
                 Identifier.fromNamespaceAndPath("esekai2", "shock_taken_more")
         ));
@@ -253,5 +282,14 @@ public final class AilmentRuntime {
 
     private static void removeEffectIdentity(LivingEntity entity, AilmentType type) {
         entity.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(AilmentBootstrap.effect(type)));
+    }
+
+    private static AilmentType ailmentType(Identifier effectId) {
+        for (AilmentType type : AilmentType.values()) {
+            if (type.effectId().equals(effectId)) {
+                return type;
+            }
+        }
+        return null;
     }
 }

@@ -1,5 +1,6 @@
 package kim.biryeong.esekai2.impl.item.level;
 
+import eu.pb4.polymer.core.api.other.PolymerComponent;
 import kim.biryeong.esekai2.impl.item.socket.SocketItemBootstrap;
 
 /**
@@ -16,7 +17,7 @@ public final class ItemLevelBootstrap {
             return;
         }
 
-        ItemLevelComponents.ITEM_LEVEL.toString();
+        PolymerComponent.registerDataComponent(ItemLevelComponents.ITEM_LEVEL);
         SocketItemBootstrap.bootstrap();
         bootstrapped = true;
     }

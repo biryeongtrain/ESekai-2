@@ -137,6 +137,8 @@ public final class SkillExecutionExecutor {
                 completed = applyDamage(context, targets, hooks, preparedDamageAction, latestDamageResults);
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction preparedApplyBuffAction) {
                 completed = hooks.applyBuff(context, targets, preparedApplyBuffAction);
+            } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction preparedRemoveEffectAction) {
+                completed = hooks.removeEffect(context, targets, preparedRemoveEffectAction);
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction preparedApplyAilmentAction) {
                 completed = hooks.applyAilment(context, targets, preparedApplyAilmentAction, Map.copyOf(latestDamageResults));
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction preparedApplyDotAction) {
