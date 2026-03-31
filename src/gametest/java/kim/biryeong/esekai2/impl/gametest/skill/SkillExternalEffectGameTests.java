@@ -22,6 +22,7 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetSelector;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetType;
+import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
@@ -67,9 +68,16 @@ public final class SkillExternalEffectGameTests {
     private static final Identifier BATTLE_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "battle_focus");
     private static final Identifier CRIPPLING_HEX_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "crippling_hex");
     private static final Identifier CLEANSE_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "cleanse_focus");
+    private static final Identifier CLEANSE_SPECTRUM_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "cleanse_spectrum");
+    private static final Identifier PURITY_WAVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "purity_wave");
+    private static final Identifier TAINTED_RELEASE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "tainted_release");
+    private static final Identifier BLANK_SLATE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "blank_slate");
+    private static final Identifier CATHARTIC_WAVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "cathartic_wave");
     private static final Identifier PURGING_HEX_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "purging_hex");
     private static final Identifier VENOM_STRIKE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "venom_strike");
     private static final Identifier SEARING_BRAND_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "searing_brand");
+    private static final Identifier SUPPORT_COMPOUND_CLEANSE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_compound_cleanse");
+    private static final Identifier SUPPORT_MALEVOLENT_WAVE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_malevolent_wave");
     private static final Identifier SUPPORT_LASTING_HEX_ID = Identifier.fromNamespaceAndPath("esekai2", "support_lasting_hex");
     private static final Identifier SUPPORT_QUICK_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_quick_focus");
     private static final Identifier SUPPORT_TOXIC_CLEANSE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_toxic_cleanse");
@@ -86,8 +94,15 @@ public final class SkillExternalEffectGameTests {
         helper.assertTrue(skillRegistry(helper).containsKey(BATTLE_FOCUS_SKILL_ID), "Battle focus should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(CRIPPLING_HEX_SKILL_ID), "Crippling hex should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(CLEANSE_FOCUS_SKILL_ID), "Cleanse focus should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(CLEANSE_SPECTRUM_SKILL_ID), "Cleanse spectrum should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(PURITY_WAVE_SKILL_ID), "Purity wave should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(TAINTED_RELEASE_SKILL_ID), "Tainted release should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(BLANK_SLATE_SKILL_ID), "Blank slate should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(CATHARTIC_WAVE_SKILL_ID), "Cathartic wave should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(PURGING_HEX_SKILL_ID), "Purging hex should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(SEARING_BRAND_SKILL_ID), "Searing brand should load into the skill registry");
+        helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_COMPOUND_CLEANSE_ID), "Compound cleanse support should load into the support registry");
+        helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_MALEVOLENT_WAVE_ID), "Malevolent wave support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_LASTING_HEX_ID), "Lasting hex support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_QUICK_FOCUS_ID), "Quick focus support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_TOXIC_CLEANSE_ID), "Toxic cleanse support should load into the support registry");
@@ -147,6 +162,10 @@ public final class SkillExternalEffectGameTests {
                 cleanseFocus(helper),
                 skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
         );
+        PreparedSkillUse multiCleansePrepared = Skills.prepareUse(
+                cleanseSpectrum(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
         PreparedSkillUse targetCleansePrepared = Skills.prepareUse(
                 purgingHex(helper),
                 skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
@@ -156,6 +175,10 @@ public final class SkillExternalEffectGameTests {
                 .filter(PreparedRemoveEffectAction.class::isInstance)
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Cleanse focus should prepare one remove_effect action"));
+        PreparedRemoveEffectAction multiCleanseAction = (PreparedRemoveEffectAction) multiCleansePrepared.onCastActions().stream()
+                .filter(PreparedRemoveEffectAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Cleanse spectrum should prepare one remove_effect action"));
         PreparedRemoveEffectAction targetCleanseAction = (PreparedRemoveEffectAction) targetCleansePrepared.onCastActions().stream()
                 .filter(PreparedRemoveEffectAction.class::isInstance)
                 .findFirst()
@@ -163,8 +186,48 @@ public final class SkillExternalEffectGameTests {
 
         helper.assertValueEqual(selfCleanseAction.effectId(), BATTLE_FOCUS_EFFECT_ID, "Prepared self-cleanse action should preserve its effect id");
         helper.assertValueEqual(selfCleanseAction.actionType(), "remove_effect", "Prepared self-cleanse action should preserve remove_effect type");
+        helper.assertValueEqual(
+                multiCleanseAction.effectIds(),
+                List.of(BATTLE_FOCUS_EFFECT_ID, POISON_EFFECT_ID),
+                "Prepared multi-cleanse action should preserve ordered effect_ids without flattening to a scalar"
+        );
+        helper.assertValueEqual(multiCleanseAction.actionType(), "remove_effect", "Prepared multi-cleanse action should preserve remove_effect type");
         helper.assertValueEqual(targetCleanseAction.effectId(), CRIPPLING_HEX_EFFECT_ID, "Prepared target-cleanse action should preserve its effect id");
         helper.assertValueEqual(targetCleanseAction.actionType(), "remove_effect", "Prepared target-cleanse action should preserve remove_effect type");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that broad purge remove_effect actions preserve their purge mode and union with explicit ids.
+     */
+    @GameTest
+    public void prepareUseBuildsPurgeRemoveEffectActionsFromConfig(GameTestHelper helper) {
+        PreparedRemoveEffectAction positivePurgeAction = preparedRemoveEffectAction(
+                Skills.prepareUse(purityWave(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                helper,
+                "Purity wave should prepare one remove_effect action"
+        );
+        PreparedRemoveEffectAction negativePurgeAction = preparedRemoveEffectAction(
+                Skills.prepareUse(taintedRelease(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                helper,
+                "Tainted release should prepare one remove_effect action"
+        );
+        PreparedRemoveEffectAction allPurgeAction = preparedRemoveEffectAction(
+                Skills.prepareUse(blankSlate(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                helper,
+                "Blank slate should prepare one remove_effect action"
+        );
+        PreparedRemoveEffectAction unionPurgeAction = preparedRemoveEffectAction(
+                Skills.prepareUse(catharticWave(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                helper,
+                "Cathartic wave should prepare one remove_effect action"
+        );
+
+        helper.assertValueEqual(positivePurgeAction.purgeMode().orElseThrow(), SkillEffectPurgeMode.POSITIVE, "Purity wave should preserve purge:positive");
+        helper.assertValueEqual(negativePurgeAction.purgeMode().orElseThrow(), SkillEffectPurgeMode.NEGATIVE, "Tainted release should preserve purge:negative");
+        helper.assertValueEqual(allPurgeAction.purgeMode().orElseThrow(), SkillEffectPurgeMode.ALL, "Blank slate should preserve purge:all");
+        helper.assertValueEqual(unionPurgeAction.purgeMode().orElseThrow(), SkillEffectPurgeMode.POSITIVE, "Cathartic wave should preserve purge:positive");
+        helper.assertValueEqual(unionPurgeAction.effectIds(), List.of(POISON_EFFECT_ID), "Cathartic wave should preserve explicit union effect ids");
         helper.succeed();
     }
 
@@ -248,6 +311,215 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
+     * Verifies that one remove_effect action can clear both a vanilla effect and a built-in ailment in one cast.
+     */
+    @GameTest
+    public void executeOnCastRemovesMultipleEffectsFromCaster(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(caster))
+        );
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Multi-cleanse setup should apply speed before the cleanse cast");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Multi-cleanse setup should apply poison before the cleanse cast");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isPresent(),
+                "Multi-cleanse setup should attach poison payload before the cleanse cast");
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                cleanseSpectrum(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Cleanse spectrum should execute both sound and remove_effect actions when configured effects are present");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Cleanse spectrum should remove the configured vanilla effect");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Cleanse spectrum should remove the configured poison MobEffect identity");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Cleanse spectrum should clear the poison attachment payload");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:positive removes beneficial effects without clearing harmful ones.
+     */
+    @GameTest
+    public void executeOnCastPurgePositiveRemovesBeneficialEffects(GameTestHelper helper) {
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                purityWave(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Purity wave should execute both sound and remove_effect actions when a beneficial effect is present");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Purity wave should remove beneficial effects");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Purity wave should leave harmful effects untouched");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:negative removes harmful effects and built-in ailment payloads without clearing beneficial ones.
+     */
+    @GameTest
+    public void executeOnCastPurgeNegativeRemovesHarmfulEffectsAndAilments(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(caster))
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                taintedRelease(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Tainted release should execute both sound and remove_effect actions when harmful effects are present");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Tainted release should leave beneficial effects untouched");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Tainted release should remove harmful vanilla effects");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Tainted release should remove harmful ailment identities");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Tainted release should clear harmful ailment attachment payloads");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:all removes all active effects from the caster.
+     */
+    @GameTest
+    public void executeOnCastPurgeAllRemovesAllActiveEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(caster))
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                blankSlate(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Blank slate should execute both sound and remove_effect actions when any active effects are present");
+        helper.assertTrue(caster.getActiveEffects().isEmpty(), "Blank slate should remove all active effects");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Blank slate should clear ailment attachment payloads while purging all");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that explicit effect ids are unioned with broad purge targets.
+     */
+    @GameTest
+    public void executeOnCastPurgeUnionRemovesExplicitAndPurgedTargets(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(caster))
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                catharticWave(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Cathartic wave should execute both sound and remove_effect actions when purge union targets are present");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Cathartic wave should remove the purged beneficial effect");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Cathartic wave should remove the explicit ailment effect target");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Cathartic wave should clear the explicit ailment attachment payload");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that executing the sample target-cleanse skill removes the configured MobEffect from the target.
      */
     @GameTest
@@ -275,6 +547,39 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
+     * Verifies that multi-remove still succeeds when only a subset of the configured effect_ids is currently present.
+     */
+    @GameTest
+    public void executeOnCastRemovesPresentSubsetOfConfiguredEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(caster))
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                cleanseSpectrum(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Cleanse spectrum should count as executed when at least one configured effect is removed");
+        helper.assertValueEqual(result.skippedActions(), 0, "Cleanse spectrum should not be skipped when one configured effect is successfully removed");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Cleanse spectrum should remove poison even when speed was never present");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Cleanse spectrum should still clear poison attachment payload when only a subset of the configured list existed");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that remove_effect safely no-ops when the configured effect is absent on the target.
      */
     @GameTest
@@ -294,6 +599,181 @@ public final class SkillExternalEffectGameTests {
         helper.assertValueEqual(result.skippedActions(), 1, "Purging hex should treat the missing remove_effect target as a skipped action");
         helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
                 "Purging hex should leave the target unchanged when the configured effect is absent");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:positive removes beneficial effects without removing harmful ones.
+     */
+    @GameTest
+    public void executeOnCastPurgesPositiveEffects(GameTestHelper helper) {
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(purityWave(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        caster,
+                        Optional.empty()
+                )
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Purity wave should execute both sound and remove_effect when a beneficial effect exists");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Purity wave should remove speed through purge:positive");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Purity wave should leave harmful effects untouched");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:negative removes harmful effects and ailment attachment payloads without clearing beneficial ones.
+     */
+    @GameTest
+    public void executeOnCastPurgesNegativeEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(venomStrike(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        setupCaster,
+                        Optional.of(caster)
+                )
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(taintedRelease(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        caster,
+                        Optional.empty()
+                )
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Tainted release should execute both sound and remove_effect when harmful effects exist");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Tainted release should keep beneficial effects");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Tainted release should remove harmful vanilla effects");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Tainted release should remove harmful ailment identities");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Tainted release should clear harmful ailment attachment payloads");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that purge:all removes every active effect category in one cast.
+     */
+    @GameTest
+    public void executeOnCastPurgesAllEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(venomStrike(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        setupCaster,
+                        Optional.of(caster)
+                )
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(blankSlate(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        caster,
+                        Optional.empty()
+                )
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Blank slate should execute both sound and remove_effect when any effects exist");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Blank slate should remove beneficial effects through purge:all");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Blank slate should remove harmful vanilla effects through purge:all");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Blank slate should remove ailment identities through purge:all");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Blank slate should clear ailment attachment payloads through purge:all");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that explicit effect ids union with purge targets instead of replacing them.
+     */
+    @GameTest
+    public void executeOnCastPurgesUnionOfPositiveAndExplicitEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        caster.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(venomStrike(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        setupCaster,
+                        Optional.of(caster)
+                )
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(catharticWave(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        caster,
+                        Optional.empty()
+                )
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Cathartic wave should execute both sound and remove_effect when either purge or explicit targets exist");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Cathartic wave should purge beneficial effects through purge:positive");
+        helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Cathartic wave should leave unrelated harmful effects untouched");
+        helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Cathartic wave should remove explicit poison even though purge is positive");
+        helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Cathartic wave should clear explicit poison attachment payload");
         helper.succeed();
     }
 
@@ -430,6 +910,63 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
+     * Verifies that linked support overrides can replace remove_effect.effect_ids with a whole ordered list.
+     */
+    @GameTest
+    public void prepareSelectedUseAppliesMultiRemoveEffectSupportOverrides(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.STICK, CLEANSE_FOCUS_SKILL_ID, List.of(supportRef(1, SUPPORT_COMPOUND_CLEANSE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CLEANSE_FOCUS_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        PreparedRemoveEffectAction removeEffectAction = (PreparedRemoveEffectAction) result.preparedUse().orElseThrow().onCastActions().stream()
+                .filter(PreparedRemoveEffectAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected cleanse focus should still expose one remove_effect action"));
+
+        helper.assertTrue(result.success(), "Selected cleanse focus should prepare successfully with multi-remove support");
+        helper.assertValueEqual(
+                removeEffectAction.effectIds(),
+                List.of(CRIPPLING_HEX_EFFECT_ID, POISON_EFFECT_ID),
+                "Linked support should replace remove_effect.effect_ids with the configured whole list"
+        );
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected socket-backed preparation can override remove_effect.purge through a linked support.
+     */
+    @GameTest
+    public void prepareSelectedUseAppliesPurgeSupportOverrides(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.STICK, PURITY_WAVE_SKILL_ID, List.of(supportRef(1, SUPPORT_MALEVOLENT_WAVE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, PURITY_WAVE_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        PreparedRemoveEffectAction removeEffectAction = preparedRemoveEffectAction(result.preparedUse().orElseThrow(), helper,
+                "Selected purity wave should still expose one remove_effect action");
+
+        helper.assertTrue(result.success(), "Selected purity wave should prepare successfully");
+        helper.assertValueEqual(removeEffectAction.purgeMode().orElseThrow(), SkillEffectPurgeMode.NEGATIVE,
+                "Linked support should override remove_effect.purge on the selected cast path");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that selected remove_effect casts clear both the poison MobEffect identity and attached ailment payload.
      */
     @GameTest
@@ -467,6 +1004,159 @@ public final class SkillExternalEffectGameTests {
                 "Selected cleanse focus should remove the poison MobEffect identity");
         helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
                 "Selected cleanse focus should clear the poison attachment payload");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected remove_effect casts honor support-provided effect_ids whole-replacement at runtime.
+     */
+    @GameTest
+    public void castSelectedSkillRemovesSupportOverrideEffectList(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(player))
+        );
+        helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Multi-remove selected cast setup should apply slowness before the cleanse cast");
+        helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Multi-remove selected cast setup should apply poison before the cleanse cast");
+        helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isPresent(),
+                "Multi-remove selected cast setup should attach poison payload before the cleanse cast");
+
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.STICK, CLEANSE_FOCUS_SKILL_ID, List.of(supportRef(1, SUPPORT_COMPOUND_CLEANSE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CLEANSE_FOCUS_SKILL_ID));
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected cleanse focus cast should succeed with multi-remove support");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected cleanse focus should execute both sound and remove_effect actions when supported targets are present");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Selected cleanse focus should remove the support-overridden slowness effect");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Selected cleanse focus should remove the support-overridden poison effect");
+        helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Selected cleanse focus should clear the support-overridden poison attachment payload");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected remove_effect casts honor support-provided purge overrides at runtime.
+     */
+    @GameTest
+    public void castSelectedSkillPurgesSupportOverriddenNegativeEffects(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        player.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(
+                        Skills.prepareUse(venomStrike(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)),
+                        helper.getLevel(),
+                        setupCaster,
+                        Optional.of(player)
+                )
+        );
+
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.STICK, PURITY_WAVE_SKILL_ID, List.of(supportRef(1, SUPPORT_MALEVOLENT_WAVE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, PURITY_WAVE_SKILL_ID));
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected purity wave cast should succeed with purge override");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2,
+                "Selected purity wave should execute both sound and remove_effect actions when overridden purge targets exist");
+        helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Selected purity wave should keep beneficial effects after purge override to negative");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Selected purity wave should remove harmful vanilla effects after purge override");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Selected purity wave should remove harmful ailment identities after purge override");
+        helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Selected purity wave should clear harmful ailment attachment payloads after purge override");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected remove_effect casts honor support-provided purge overrides at runtime.
+     */
+    @GameTest
+    public void castSelectedSkillRemovesSupportOverridePurgeTargets(GameTestHelper helper) {
+        Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
+                80,
+                1
+        ));
+        player.addEffect(new MobEffectInstance(
+                BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
+                80,
+                0
+        ));
+
+        PreparedSkillUse poisonPrepared = Skills.prepareUse(
+                venomStrike(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(poisonPrepared, helper.getLevel(), setupCaster, Optional.of(player))
+        );
+
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.STICK, PURITY_WAVE_SKILL_ID, List.of(supportRef(1, SUPPORT_MALEVOLENT_WAVE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, PURITY_WAVE_SKILL_ID));
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected purity wave cast should succeed with purge override support");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected purity wave should execute both sound and remove_effect actions when overridden purge targets are present");
+        helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
+                "Selected purity wave should keep beneficial effects when the support overrides purge to negative");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
+                "Selected purity wave should remove the support-overridden harmful vanilla effect");
+        helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
+                "Selected purity wave should remove the support-overridden harmful ailment identity");
+        helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
+                "Selected purity wave should clear the support-overridden harmful ailment payload");
         helper.succeed();
     }
 
@@ -522,7 +1212,7 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
-     * Verifies that executing the sample dot skill damages the target over time and stops once the duration expires.
+     * Verifies that generic apply_dot waits for its first interval, deals periodic damage, and does not tick again after expiry.
      */
     @GameTest
     public void executeOnCastAppliesDotDamageAndExpires(GameTestHelper helper) {
@@ -544,21 +1234,24 @@ public final class SkillExternalEffectGameTests {
         );
 
         float initialHealth = zombie.getHealth();
-        float[] settledHealth = new float[1];
+        float[] healthAfterExpiry = new float[1];
 
         helper.assertValueEqual(result.executedActions(), 2, "Searing brand should execute both sound and dot actions");
+        helper.runAfterDelay(1, () ->
+                helper.assertValueEqual(zombie.getHealth(), initialHealth, "The generic DoT should not tick before its first interval elapses")
+        );
         helper.runAfterDelay(3, () ->
                 helper.assertTrue(zombie.getHealth() < initialHealth, "The first DoT tick should damage the target shortly after cast")
         );
-        helper.runAfterDelay(12, () -> settledHealth[0] = zombie.getHealth());
-        helper.runAfterDelay(18, () -> {
-            helper.assertValueEqual(zombie.getHealth(), settledHealth[0], "The generic DoT should stop dealing damage once its duration expires");
+        helper.runAfterDelay(10, () -> healthAfterExpiry[0] = zombie.getHealth());
+        helper.runAfterDelay(14, () -> {
+            helper.assertValueEqual(zombie.getHealth(), healthAfterExpiry[0], "The generic DoT should stop dealing damage once its duration expires");
             helper.succeed();
         });
     }
 
     /**
-     * Verifies that reapplying the same dot id refreshes duration instead of expiring on the original timer.
+     * Verifies that reapplying the same dot id refreshes duration past the original expiry and still stops cleanly after the refreshed window.
      */
     @GameTest
     public void reapplyingSameDotIdRefreshesDuration(GameTestHelper helper) {
@@ -580,12 +1273,21 @@ public final class SkillExternalEffectGameTests {
                 Skills.executeOnCast(SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)))
         );
 
-        float[] healthAtOriginalExpiry = new float[1];
-        helper.runAfterDelay(10, () -> healthAtOriginalExpiry[0] = zombie.getHealth());
-        helper.runAfterDelay(13, () -> {
+        float[] healthAfterOriginalExpiryWindow = new float[1];
+        float[] healthAfterRefreshedExpiry = new float[1];
+        helper.runAfterDelay(10, () -> healthAfterOriginalExpiryWindow[0] = zombie.getHealth());
+        helper.runAfterDelay(15, () -> {
             helper.assertTrue(
-                    zombie.getHealth() < healthAtOriginalExpiry[0],
+                    zombie.getHealth() < healthAfterOriginalExpiryWindow[0],
                     "Reapplying the same dot id should refresh duration and continue ticking past the original expiry window"
+            );
+        });
+        helper.runAfterDelay(18, () -> healthAfterRefreshedExpiry[0] = zombie.getHealth());
+        helper.runAfterDelay(19, () -> {
+            helper.assertValueEqual(
+                    zombie.getHealth(),
+                    healthAfterRefreshedExpiry[0],
+                    "The refreshed generic DoT should not deal extra ticks after its refreshed expiry window"
             );
             helper.succeed();
         });
@@ -634,6 +1336,31 @@ public final class SkillExternalEffectGameTests {
                 .orElseThrow(() -> helper.assertionException("Cleanse focus should decode successfully"));
     }
 
+    private static SkillDefinition purityWave(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(PURITY_WAVE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Purity wave should decode successfully"));
+    }
+
+    private static SkillDefinition taintedRelease(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(TAINTED_RELEASE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Tainted release should decode successfully"));
+    }
+
+    private static SkillDefinition blankSlate(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(BLANK_SLATE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Blank slate should decode successfully"));
+    }
+
+    private static SkillDefinition catharticWave(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(CATHARTIC_WAVE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Cathartic wave should decode successfully"));
+    }
+
+    private static SkillDefinition cleanseSpectrum(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(CLEANSE_SPECTRUM_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Cleanse spectrum should decode successfully"));
+    }
+
     private static SkillDefinition purgingHex(GameTestHelper helper) {
         return skillRegistry(helper).getOptional(PURGING_HEX_SKILL_ID)
                 .orElseThrow(() -> helper.assertionException("Purging hex should decode successfully"));
@@ -657,6 +1384,17 @@ public final class SkillExternalEffectGameTests {
     private static net.minecraft.world.effect.MobEffect effect(GameTestHelper helper, Identifier effectId) {
         return BuiltInRegistries.MOB_EFFECT.getOptional(effectId)
                 .orElseThrow(() -> helper.assertionException("Missing mob effect fixture: " + effectId));
+    }
+
+    private static PreparedRemoveEffectAction preparedRemoveEffectAction(
+            PreparedSkillUse prepared,
+            GameTestHelper helper,
+            String failureMessage
+    ) {
+        return (PreparedRemoveEffectAction) prepared.onCastActions().stream()
+                .filter(PreparedRemoveEffectAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException(failureMessage));
     }
 
     private static int activeEffectDuration(LivingEntity entity, Identifier effectId) {

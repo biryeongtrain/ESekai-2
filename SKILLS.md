@@ -26,6 +26,10 @@
   - `runGameTest` 실행
   - `build/junit.xml` 에 테스트명 존재 확인
 - 에이전트가 “테스트가 이미 있다”고 보고해도 실행 리포트로 교차 검증하기 전에는 완료로 처리하지 않습니다.
+- `wait_agent` 의 짧은 timeout 은 진행 상황 확인일 뿐 실패 판정이 아닙니다.
+- `game-tester` 같은 장시간 작업 에이전트는 짧은 wait 후 바로 중단하거나 대체하지 않습니다.
+- 에이전트가 실제로 막혔는지 확인되기 전에는 충분한 시간을 두고 기다리며, 필요하면 추가 입력으로 범위를 명확히 하고 계속 진행시킵니다.
+- 메인 에이전트가 서둘러 작업을 회수해 직접 처리하면, 사용자가 요구한 위임 구조를 깨뜨린 것으로 간주합니다.
 
 ## Feedback Log
 
@@ -48,3 +52,39 @@
 - 재발 방지:
   - 앞으로 `game-tester` 위임 프롬프트에는 entrypoint, 실행, 리포트 확인을 명시적으로 넣는다.
   - 필요하면 테스트 파일과 `src/gametest/resources/fabric.mod.json` 을 같은 ownership 으로 묶어서 위임한다.
+
+- 사용자 지적: `game-tester` 에게 주는 시간이 너무 짧아서, 실제로 작업 중인데 메인 에이전트가 너무 빨리 실패처럼 취급하고 회수했다.
+- 원인:
+  - 짧은 `wait_agent` timeout 을 완료 실패와 비슷하게 해석했다.
+  - 장시간 GameTest 작성/실행 작업에 필요한 대기 시간을 충분히 주지 않았다.
+  - 진행 중인 에이전트에게 추가 지시 없이 메인 에이전트가 너무 빨리 직접 처리로 전환했다.
+- 재발 방지:
+  - `game-tester` 첫 대기는 짧은 polling 이 아니라 충분한 실행 시간을 주는 wait 로 시작한다.
+  - timeout 은 실패가 아니라 미완료 신호로만 해석하고, 실제 blocker 가 확인되기 전에는 에이전트를 죽이거나 회수하지 않는다.
+  - 테스트 위임 작업은 가능한 한 끝까지 `game-tester` ownership 으로 유지하고, 메인 에이전트는 결과 병합과 최종 검증에 집중한다.
+
+- 사용자 지적: 서브 에이전트를 더 적극적으로 활용하고, 특히 `game-tester` 도 병렬로 늘려 속도를 높여야 한다.
+- 원인:
+  - 병렬 작업 계획은 제시했지만 실제 ownership 분리와 결과 병합 단계가 느슨했다.
+  - 메인 에이전트가 워크트리에 반영된 서브 에이전트 산출물을 다시 스캔하지 않고 중복 파일/entrypoint 를 만들 위험이 있었다.
+- 재발 방지:
+  - 병렬 작업은 항상 `공용 foundation`, `개별 기능`, `GameTest`, `review` 단위로 ownership 을 분리한다.
+  - 서브 에이전트 작업이 끝난 뒤에는 구현 전에 `git status` 와 관련 경로 재탐색으로 워크트리 변화를 다시 확인한다.
+  - `game-tester` 는 가능하면 둘 이상 병렬로 운용하고, 메인 에이전트는 테스트 작성 대신 병합과 최종 검증에 집중한다.
+
+- 사용자 지적: mana spending / insufficient-mana 검증은 반드시 양수 `CombatStats.MANA` 를 명시적으로 세팅한 player holder 기준으로 작성해야 한다.
+- 원인:
+  - 현재 skill runtime 의 mana gate 는 모든 cast 에 전역적으로 걸리는 것이 아니라, player cast 이면서 resolved `CombatStats.MANA` 가 양수일 때만 활성화되어야 한다.
+  - 이 조건을 테스트가 명시하지 않으면 기존 non-player cast 나 zero-mana baseline 을 의도치 않게 깨뜨릴 수 있다.
+- 재발 방지:
+  - mana gate 관련 구현은 `ServerPlayer` + `resolved MANA > 0` 조건에서만 활성화한다.
+  - mana 관련 GameTest 는 attacker/player holder 에 양수 `CombatStats.MANA` 를 명시적으로 세팅한다.
+  - 기존 cast regression 은 zero-mana 또는 non-player source 에서 그대로 유지되는지 함께 확인한다.
+
+- 사용자 지적: direct `executeOnCast` mana gating 은 attacker stat holder 의 `CombatStats.MANA` 가 양수일 때에만 기대된다.
+- 원인:
+  - resource runtime 을 실제 집행으로 확장하면서, 기존 direct runtime 테스트 전부에 mana gate 를 일반 적용하면 `default mana = 0` 인 테스트 기반과 충돌할 수 있다.
+- 재발 방지:
+  - direct player-sourced cast 의 mana gate 는 `attackerStats.resolvedValue(CombatStats.MANA) > 0` 인 경우에만 검증한다.
+  - direct `executeOnCast` GameTest 는 mana-positive 케이스와 non-mana baseline 을 분리해 작성한다.
+  - coverage 보고 시 direct runtime 테스트가 cooldown/dimension only 인지, mana-positive player gate 까지 포함하는지 명시한다.

@@ -1,0 +1,40 @@
+{
+  "identifier": "esekai2:charged_focus",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 8,
+    "cooldown_ticks": 5,
+    "charges": 2,
+    "charge_regen": 1.0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.amethyst_block.chime"
+          },
+          {
+            "type": "apply_buff",
+            "effect_id": "minecraft:glowing",
+            "duration_ticks": 20,
+            "amplifier": 0,
+            "ambient": false,
+            "show_particles": true,
+            "show_icon": true
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

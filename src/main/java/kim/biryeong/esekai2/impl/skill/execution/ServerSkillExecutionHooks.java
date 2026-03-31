@@ -2,6 +2,7 @@ package kim.biryeong.esekai2.impl.skill.execution;
 
 import de.tomalbrc.sandstorm.util.ParticleUtil;
 import kim.biryeong.esekai2.Esekai2;
+import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
@@ -19,6 +20,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonBlockAction;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
+import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
@@ -36,6 +38,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -151,30 +154,66 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         Objects.requireNonNull(targets, "targets");
         Objects.requireNonNull(action, "action");
 
-        MobEffect effect = BuiltInRegistries.MOB_EFFECT.getOptional(action.effectId()).orElse(null);
-        if (effect == null) {
-            return false;
-        }
-
         boolean removed = false;
         for (Entity target : targets) {
             if (!(target instanceof LivingEntity livingTarget)) {
                 continue;
             }
 
-            if (AilmentRuntime.remove(livingTarget, action.effectId())) {
+            java.util.LinkedHashSet<Identifier> effectIds = new java.util.LinkedHashSet<>(action.effectIds());
+            action.purgeMode().ifPresent(mode -> collectPurgedEffectIds(livingTarget, mode, effectIds));
+
+            for (Identifier effectId : effectIds) {
+                MobEffect effect = BuiltInRegistries.MOB_EFFECT.getOptional(effectId).orElse(null);
+                if (effect == null) {
+                    continue;
+                }
+
+                if (AilmentRuntime.remove(livingTarget, effectId)) {
+                    removed = true;
+                    continue;
+                }
+
+                if (livingTarget.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)) == null) {
+                    continue;
+                }
+
+                livingTarget.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
                 removed = true;
-                continue;
             }
-
-            if (livingTarget.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect)) == null) {
-                continue;
-            }
-
-            livingTarget.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
-            removed = true;
         }
         return removed;
+    }
+
+    private static void collectPurgedEffectIds(
+            LivingEntity livingTarget,
+            SkillEffectPurgeMode mode,
+            java.util.Set<Identifier> removalIds
+    ) {
+        Objects.requireNonNull(livingTarget, "livingTarget");
+        Objects.requireNonNull(mode, "mode");
+        Objects.requireNonNull(removalIds, "removalIds");
+
+        for (MobEffectInstance effectInstance : livingTarget.getActiveEffects()) {
+            MobEffect effect = effectInstance.getEffect().value();
+            if (matchesPurgeMode(mode, effect.getCategory())) {
+                removalIds.add(BuiltInRegistries.MOB_EFFECT.getKey(effect));
+            }
+        }
+
+        if (mode == SkillEffectPurgeMode.NEGATIVE || mode == SkillEffectPurgeMode.ALL) {
+            for (AilmentType ailmentType : AilmentType.values()) {
+                removalIds.add(ailmentType.effectId());
+            }
+        }
+    }
+
+    private static boolean matchesPurgeMode(SkillEffectPurgeMode mode, MobEffectCategory category) {
+        return switch (mode) {
+            case POSITIVE -> category == MobEffectCategory.BENEFICIAL;
+            case NEGATIVE -> category == MobEffectCategory.HARMFUL;
+            case ALL -> true;
+        };
     }
 
     private static MobEffectInstance resolveEffectInstance(
@@ -290,7 +329,8 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
                     action.ailmentType(),
                     hitResult,
                     action.durationTicks(),
-                    action.potencyMultiplierPercent()
+                    action.potencyMultiplierPercent(),
+                    action.refreshPolicy()
             );
         }
         return applied;

@@ -105,8 +105,9 @@ public record SkillActionOverride(
         Map<String, String> parameterOverrides = new LinkedHashMap<>();
         for (SkillActionFieldOverride fieldOverride : fieldOverrides) {
             Objects.requireNonNull(fieldOverride, "fieldOverrides entry");
-            if (fieldOverride.path().type() == SkillActionFieldPathType.PARAMETER) {
-                parameterOverrides.put(fieldOverride.path().parameterKey(), fieldOverride.value());
+            if (fieldOverride.path().type() == SkillActionFieldPathType.PARAMETER
+                    && fieldOverride.value().isScalar()) {
+                parameterOverrides.put(fieldOverride.path().parameterKey(), fieldOverride.value().first());
             }
         }
         return Map.copyOf(parameterOverrides);
@@ -120,7 +121,7 @@ public record SkillActionOverride(
     public String calculationIdOverride() {
         for (SkillActionFieldOverride fieldOverride : fieldOverrides) {
             if (fieldOverride.path().type() == SkillActionFieldPathType.CALCULATION_ID) {
-                return fieldOverride.value();
+                return fieldOverride.value().first();
             }
         }
         return "";

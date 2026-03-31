@@ -26,12 +26,12 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 36개입니다.
+- 완료된 기반 작업은 현재 45개입니다.
 - 현재 활성 백로그는 2개입니다.
   - `Full data-driven skill system`
   - `Ailment system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 219개가 전부 통과했습니다.
+- 최신 안정 기준에서는 required Fabric GameTest 284개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -54,7 +54,7 @@
   - support semantics 가 확장되어 `appended_rules`, socket index precedence, 최소 predicate/condition tie-in 이 selected cast path 위에서 동작합니다.
   - `apply_effect` 와 legacy `apply_buff`, `apply_dot`, `apply_ailment` action 이 typed graph, selected cast path, support override path 에 연결되어 있습니다.
   - `MobEffect` 기반 buff/debuff authoring 이 `refresh_policy` 와 함께 datapack/schema/runtime/support override 경로에 연결되어 있습니다.
-  - `IGNITE`, `SHOCK`, `POISON`, `BLEED` 는 `MobEffect + attachment payload` 구조로 실제 runtime tick 또는 damage amplification 에 연결되어 있습니다.
+  - `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `CHILL`, `FREEZE`, `STUN` 은 `MobEffect + attachment payload` 구조로 실제 runtime tick, damage amplification, movement control, cast-block 경로에 연결되어 있습니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
 - 몬스터 시스템
   - monster stat baseline, monster level scaling, rarity 기반 item level derivation 이 구현되어 있습니다.
@@ -249,10 +249,55 @@
    - GameTest entrypoint 누락이 수정되어 `SkillSupportGameTests`, `SelectedSkillCastGameTests`, `SkillAilmentGameTests`, `SkillExternalEffectGameTests` 가 실제 runner 와 `build/junit.xml` 에 등록됩니다.
    - validation repair 과정에서 `damage_taken_more` ailment runtime bug 가 수정되어 shock amplification 이 hit/dot 양쪽에서 실제로 적용되고, 최신 안정 기준은 required GameTest 219개 green 입니다.
 
+37. Multi-effect cleanse utility expansion
+   - `remove_effect` action 이 `effect_ids` ordered list 를 지원하고, legacy `effect_id` 는 single-entry shorthand 로 계속 호환됩니다.
+   - support override payload 는 scalar/list typed surface 로 확장되어 `remove_effect.effect_ids` whole-replace 가 selected cast path 와 일반 prepare path 에서 모두 동작합니다.
+   - sample `cleanse_spectrum`, `support_compound_cleanse` fixture 와 함께 multi-remove prepare, vanilla + ailment 동시 정화, partial-missing 성공, selected cast whole-list override path 가 GameTest 와 `build/junit.xml` 기준으로 검증되었습니다.
+
+38. Broad purge cleanse utility expansion
+   - `remove_effect` action 이 optional `purge` field 를 지원해 `positive`, `negative`, `all` broad purge 를 기존 explicit id surface 와 함께 사용할 수 있습니다.
+   - broad purge 는 `MobEffectCategory` 를 사용하고, built-in ailment 는 `negative/all` purge 에서 effect identity 와 attachment payload 가 함께 정리됩니다.
+   - sample `purity_wave`, `tainted_release`, `blank_slate`, `cathartic_wave`, `support_malevolent_wave` fixture 와 함께 broad purge prepare, explicit union, selected cast support override, `build/junit.xml` 기반 validation closure 가 GameTest 로 검증되었습니다.
+
+39. Compound has_effect predicate expansion
+   - `has_effect` predicate 가 `effect_ids`, `match(any_of|all_of)`, `negate` 를 지원해 single-effect gating 을 compound effect gating 으로 확장합니다.
+   - legacy `effect_id` 는 single-entry shorthand 로 계속 호환되고, subject semantics 는 기존 `primary_target`, `self`, `target` 을 그대로 유지합니다.
+   - compound codec round-trip, invalid payload validation, `any_of/all_of/negate` runtime semantics, built-in ailment identity compatibility, support-appended rule gating, `build/junit.xml` 기반 validation closure 가 GameTest 로 검증되었습니다.
+
+40. Periodic damage runtime i-frame bypass and baseline repair
+   - generic `apply_dot` 와 ailment periodic damage 는 이제 Minecraft hit invulnerability frame 에 막히지 않도록 runtime damage 적용 직전에 hurt cooldown 을 초기화합니다.
+   - `SkillDotRuntimeManager` 는 서버 lifecycle 시작/종료 시 static runtime state 를 정리해 release blocker 였던 generic DoT expiry/refresh flaky 경로를 안정화합니다.
+   - generic DoT expiry, refreshed duration, shock-active generic DoT runtime tick, compound `has_effect` 검증까지 포함해 required Fabric GameTest 245개 green baseline 이 복구되었습니다.
+
+41. Non-DoT ailment control foundation
+   - `CHILL`, `FREEZE`, `STUN` 이 `MobEffect + attachment payload` 기반 ailment runtime 으로 추가되었고, `CHILL` 은 potency 기반 movement slow, `FREEZE/STUN` 은 zero-move + cast-block ailment 로 연결되었습니다.
+   - `FREEZE/STUN` active source 는 `Skills.executeOnCast(...)` 와 selected cast path 에서 runtime no-op + warning 으로 차단되고, `remove_effect` / purge negative 경로는 새 ailment effect id 도 attachment payload 와 함께 정리합니다.
+   - `SkillAilmentGameTests`, `AilmentControlGameTests`, 신규 datapack fixtures, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 254개 green baseline 이 검증되었습니다.
+
+42. Data-driven ailment refresh policy and control interaction polish
+   - `apply_ailment` action 이 `refresh_policy` 를 지원하고, `SkillAilmentRefreshPolicy` 가 `stronger_only`, `longer_only`, `overwrite` semantics 를 datapack, support override, selected cast path 에서 일관되게 보존합니다.
+   - ailment runtime replacement 는 이제 policy-driven 으로 동작하며, `CHILL` 은 overwrite 경로에서 더 약한 payload 도 교체할 수 있고, `FREEZE/STUN` 은 overwrite 경로에서 더 짧은 duration 도 교체할 수 있습니다.
+   - `SkillAilmentGameTests`, `support_overwriting_kindling`, `build/junit.xml` validation closure 까지 포함해 default refresh policy, overwrite chill replacement, freeze 제거 후 chill slow 복귀, selected cast support refresh_policy override 가 required Fabric GameTest 257개 green baseline 으로 검증되었습니다.
+
+43. Skill runtime enforcement for mana, cooldown, and disabled dimensions
+   - selected cast 와 direct player-sourced cast 는 이제 persistent mana/cooldown state 를 사용해 `resource_cost`, `cooldown_ticks`, `disabled_dims` 를 runtime gate 로 실제 집행합니다.
+   - `PlayerResourceState`, `PlayerResources`, `PlayerSkillCooldownState`, `PlayerSkillCooldowns` 와 대응 SavedData/service 가 추가되어 server-side mana 소비와 skill-id keyed cooldown tracking 이 준비되었습니다.
+   - `battle_focus`, `overworld_barrier` fixture 와 함께 selected cast mana spend/insufficient mana/dimension block, direct executeOnCast cooldown/dimension gate, direct positive-mana player gate, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 265개 green baseline 이 검증되었습니다.
+
+44. Skill charge runtime enforcement
+   - `SkillConfig.charges` 와 `charge_regen` 이 selected cast 와 direct player-sourced cast runtime 에 실제 연결되어, charge depletion, lazy recharge, cooldown 병존 gate 가 server-side persistent state 로 집행됩니다.
+   - `PlayerSkillChargeState`, `PlayerSkillCharges` 와 대응 SavedData/service 가 추가되어 player UUID + skill id keyed stored charges 와 pending recharge ready time queue 가 유지됩니다.
+   - `charged_surge`, `charged_focus`, `charged_reserve` fixture 와 함께 selected cast/direct cast charge spend, zero-charge block, recharge after time advance, cooldown + charge coexistence, mana-block no-spend, charge-block side-effect order regression, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 276개 green baseline 이 검증되었습니다.
+
+45. Skill burst runtime enforcement for `times_to_cast`
+   - `SkillConfig.times_to_cast` 가 selected cast 와 direct player-sourced cast runtime 에 실제 연결되어, 10-tick burst window, exhausted burst block, same-skill follow-up refresh, successful different-skill reset semantics 가 server-side persistent state 로 집행됩니다.
+   - `PlayerSkillBurstState`, `PlayerSkillBursts` 와 대응 SavedData/service 가 추가되어 player UUID + skill id keyed burst remaining cast count 와 absolute expiry time 이 유지됩니다.
+   - `burst_strike`, `burst_focus`, `burst_reserve` fixture 와 함께 selected cast/direct cast burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 284개 green baseline 이 검증되었습니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 219개 전부 통과입니다.
+- 최신 안정 기준에서는 required Fabric GameTest 284개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -435,34 +480,48 @@
 2. Ailment system
    - 목적: PoE 감성의 주요 상태이상 계산 축을 도입한다.
    - 포함 범위:
-     - `CHILL`
-     - `FREEZE`
-     - `STUN`
+     - `CHILL`, `FREEZE`, `STUN` 후속 공식 정리
+     - ailment 상호작용과 authoring polish
    - 현재 완료 범위:
      - `IGNITE`
      - `SHOCK`
      - `POISON`
      - `BLEED`
+     - `CHILL`
+     - `FREEZE`
+     - `STUN`
    - 제외 범위:
      - 모든 세부 공식의 완전 복제
    - 완료 기준:
-     - 남은 `CHILL`, `FREEZE`, `STUN` 이 같은 `MobEffect + attachment payload` 구조에 연결됨
-     - GameTest 로 상태이상 부여, 지속, 제거, 후속 전투 영향이 검증됨
+     - 후속 ailment 공식과 상호작용이 현재 foundation 위에서 확장 가능함
+     - GameTest 로 상태이상 부여, 지속, 제거, 후속 전투 영향이 계속 회귀 없이 유지됨
 
 ## Next Focus
 
 - 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
-- 방금 완료된 승인 단위는 `Has effect predicate and GameTest execution repair` 입니다.
-- 이번 완료 단위로 typed graph `has_effect`, `SkillPredicateSubject`, skill GameTest entrypoint repair, `build/junit.xml` 기반 validation closure, shock `damage_taken_more` runtime fix 가 추가되었습니다.
-- 직전 승인 단위는 `Cleanse utility remove_effect integration` 입니다.
-- 직전 완료 단위로 typed graph `remove_effect`, ailment-aware effect cleanup, support/selected cast `effect_id` override compatibility, cleanse utility datapack fixtures 가 추가되었습니다.
+- 방금 완료된 승인 단위는 `times_to_cast burst runtime` 입니다.
+- 이번 완료 단위로 `PlayerSkillBurstState`, `PlayerSkillBursts`, player burst SavedData/service, selected cast/direct player runtime burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `burst_strike`, `burst_focus`, `burst_reserve` fixture, required Fabric GameTest 284 green baseline 이 추가되었습니다.
+- 직전 승인 단위는 `Skill charges runtime` 입니다.
+- 직전 완료 단위로 `PlayerSkillChargeState`, `PlayerSkillCharges`, player charge SavedData/service, selected cast/direct player runtime charge spend/block/recharge, cooldown + charge coexistence, charge-block side-effect order regression coverage, `charged_surge`, `charged_focus`, `charged_reserve` fixture, required Fabric GameTest 276 green baseline 이 추가되었습니다.
+- 직전 승인 단위는 `Skill runtime enforcement for mana, cooldown, and disabled dimensions` 입니다.
+- 직전 완료 단위로 `PlayerResourceState`, `PlayerResources`, `PlayerSkillCooldownState`, `PlayerSkillCooldowns`, selected cast/direct player runtime mana spend, cooldown start/block, disabled dimension gate, `overworld_barrier` fixture, required Fabric GameTest 265 green baseline 이 추가되었습니다.
+- 직전 승인 단위는 `Data-driven ailment refresh policy and control interaction polish` 입니다.
+- 직전 완료 단위로 `SkillAilmentRefreshPolicy`, `apply_ailment.refresh_policy`, policy-driven ailment replacement semantics, selected cast/support refresh override parity, overwrite chill replacement, freeze removal 후 chill slow 복귀, required Fabric GameTest 257 green baseline 이 추가되었습니다.
+- 직전 승인 단위는 `Non-DoT ailment control foundation` 입니다.
+- 직전 완료 단위로 `CHILL/FREEZE/STUN`, non-DoT ailment runtime 확장, movement slow/zero semantics, freeze/stun cast-block warning path, control ailment datapack fixtures, required Fabric GameTest 254 green baseline 이 추가되었습니다.
+- 그 이전 승인 단위는 `Periodic damage runtime i-frame bypass and baseline repair` 입니다.
+- 그 이전 완료 단위로 generic `apply_dot`/ailment periodic damage 의 hurt cooldown bypass, `SkillDotRuntimeManager` static state cleanup, generic DoT expiry/refresh/shock runtime GameTest 안정화, required Fabric GameTest 245 green baseline 복구가 추가되었습니다.
+- 직전 승인 단위는 `Compound has_effect predicate expansion` 입니다.
+- 직전 완료 단위로 typed graph `has_effect.effect_ids`, `SkillPredicateMatchMode`, `negate`, compound `any_of/all_of` gating, support-appended rule predicate coverage, `build/junit.xml` 기반 validation closure 가 추가되었습니다.
+- 그 이전 승인 단위는 `Broad purge cleanse utility expansion` 입니다.
+- 그 이전 완료 단위로 typed graph `remove_effect.purge`, `SkillEffectPurgeMode`, `MobEffectCategory` 기반 broad purge, explicit id union semantics, broad purge datapack fixtures, selected cast `purge` support override, `build/junit.xml` 기반 validation closure 가 추가되었습니다.
 - 그 이전 승인 단위는 `MobEffect-based buff/debuff effect integration` 입니다.
 - 이번 완료 단위로 `apply_effect`, legacy `apply_buff` compatibility, `MobEffectRefreshPolicy`, target debuff authoring, selected cast/support override, duration stacking semantics 가 추가되었습니다.
 - 직전 단위로 `MobEffect-based ailment foundation` 이 들어가 있으며 `apply_ailment`, `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `MobEffect + attachment payload`, `damage_taken_more` 연동이 검증되었습니다.
 - `AoE-style calculation/predicate expansion` 은 직전 단위에서 완료되었고, `calculation_id`, `skill_value`, route/selector/action predicate 는 AoE 지향 typed expression layer 로 이미 연결되어 있습니다.
-- `Ailment system` 은 일부 진행 상태이며, 남은 범위는 `CHILL / FREEZE / STUN` 과 후속 공식 정리입니다.
-- 현재 다음 승인 단위는 `Full data-driven skill system` 의 후속 effect utility slice 입니다.
-- 다음 후보는 `Ailment system` 의 `CHILL / FREEZE / STUN` 축입니다.
+- `Ailment system` 은 foundation 범위가 확장되었고, 남은 범위는 `CHILL / FREEZE / STUN` 후속 공식 정리와 상호작용 polish 입니다.
+- 현재 다음 승인 단위는 `Full data-driven skill system` 의 후속 resource/runtime authoring 확장입니다.
+- 다음 기능 후보는 mana regeneration/resource UI sync 같은 resource follow-up slice, `Ailment system` 후속 공식 정리, release stabilization, 또는 `Full data-driven skill system` effect utility follow-up slice 입니다.
 - support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
 - selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
 - 선행 기반은 준비되어 있습니다.

@@ -9,6 +9,7 @@ import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeCalculation;
 import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeResult;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.stat.combat.CombatStats;
 import kim.biryeong.esekai2.api.stat.definition.StatDefinition;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
@@ -41,6 +42,8 @@ public final class AilmentRuntime {
     private static final double BLEED_TOTAL_RATIO = 0.70;
     private static final double SHOCK_PERCENT_RATIO = 0.50;
     private static final double SHOCK_PERCENT_CAP = 50.0;
+    private static final double CHILL_PERCENT_RATIO = 0.30;
+    private static final double CHILL_PERCENT_CAP = 30.0;
 
     private AilmentRuntime() {
     }
@@ -52,12 +55,14 @@ public final class AilmentRuntime {
             AilmentType type,
             DamageCalculationResult hitResult,
             int durationTicks,
-            double potencyMultiplier
+            double potencyMultiplier,
+            SkillAilmentRefreshPolicy refreshPolicy
     ) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(sourceSkillId, "sourceSkillId");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(hitResult, "hitResult");
+        Objects.requireNonNull(refreshPolicy, "refreshPolicy");
         if (durationTicks <= 0) {
             return false;
         }
@@ -75,8 +80,11 @@ public final class AilmentRuntime {
                 durationTicks,
                 potencyMultiplier
         );
+        if (type.usesPotency() && incoming.potency() <= 0.0) {
+            return false;
+        }
         Optional<AilmentPayload> current = AilmentBootstrap.get(target).flatMap(state -> state.get(type));
-        if (current.isPresent() && !shouldReplace(current.orElseThrow(), incoming)) {
+        if (current.isPresent() && !shouldReplace(current.orElseThrow(), incoming, refreshPolicy)) {
             return false;
         }
 
@@ -152,6 +160,18 @@ public final class AilmentRuntime {
         return remove(entity, type);
     }
 
+    public static Optional<AilmentType> blockingSkillExecutionAilment(LivingEntity entity) {
+        Objects.requireNonNull(entity, "entity");
+
+        if (hasActive(entity, AilmentType.FREEZE)) {
+            return Optional.of(AilmentType.FREEZE);
+        }
+        if (hasActive(entity, AilmentType.STUN)) {
+            return Optional.of(AilmentType.STUN);
+        }
+        return Optional.empty();
+    }
+
     public static StatHolder resolveDefenderStats(ServerLevel level, LivingEntity target, StatHolder fallback) {
         Objects.requireNonNull(level, "level");
         Objects.requireNonNull(target, "target");
@@ -197,6 +217,8 @@ public final class AilmentRuntime {
         if (damage <= 0.0F) {
             return false;
         }
+        // PoE-style periodic damage should not be suppressed by Minecraft hit i-frames.
+        target.invulnerableTime = 0;
         target.hurtServer(level, damageSource(level, payload), damage);
         return true;
     }
@@ -239,6 +261,24 @@ public final class AilmentRuntime {
                     durationTicks,
                     1
             );
+            case CHILL -> new AilmentPayload(
+                    type,
+                    sourceSkillId,
+                    sourceEntityUuid,
+                    Math.min(CHILL_PERCENT_CAP, finalDealtDamage * CHILL_PERCENT_RATIO * multiplier),
+                    durationTicks,
+                    durationTicks,
+                    1
+            );
+            case FREEZE, STUN -> new AilmentPayload(
+                    type,
+                    sourceSkillId,
+                    sourceEntityUuid,
+                    0.0,
+                    durationTicks,
+                    durationTicks,
+                    1
+            );
         };
     }
 
@@ -258,22 +298,33 @@ public final class AilmentRuntime {
         return new AilmentPayload(type, sourceSkillId, sourceEntityUuid, damagePerTick, durationTicks, durationTicks, tickInterval);
     }
 
-    private static boolean shouldReplace(AilmentPayload current, AilmentPayload incoming) {
-        if (incoming.potency() > current.potency()) {
-            return true;
-        }
-        if (incoming.potency() < current.potency()) {
-            return false;
-        }
-        return incoming.remainingTicks() >= current.remainingTicks();
+    private static boolean shouldReplace(
+            AilmentPayload current,
+            AilmentPayload incoming,
+            SkillAilmentRefreshPolicy refreshPolicy
+    ) {
+        return switch (refreshPolicy) {
+            case OVERWRITE -> true;
+            case LONGER_ONLY -> incoming.remainingTicks() >= current.remainingTicks();
+            case STRONGER_ONLY -> {
+                if (incoming.potency() > current.potency()) {
+                    yield true;
+                }
+                if (incoming.potency() < current.potency()) {
+                    yield false;
+                }
+                yield incoming.remainingTicks() >= current.remainingTicks();
+            }
+        };
     }
 
     private static void applyEffectIdentity(LivingEntity target, AilmentPayload payload) {
         MobEffect effect = AilmentBootstrap.effect(payload.type());
+        target.removeEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect));
         target.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect),
                 payload.remainingTicks(),
-                0,
+                effectAmplifier(payload),
                 false,
                 false,
                 false
@@ -291,5 +342,25 @@ public final class AilmentRuntime {
             }
         }
         return null;
+    }
+
+    private static boolean hasActive(LivingEntity entity, AilmentType type) {
+        return AilmentBootstrap.get(entity)
+                .flatMap(state -> state.get(type))
+                .filter(payload -> !payload.isExpired())
+                .isPresent()
+                || entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(AilmentBootstrap.effect(type))) != null;
+    }
+
+    private static int effectAmplifier(AilmentPayload payload) {
+        if (payload.type() != AilmentType.CHILL) {
+            return 0;
+        }
+
+        int potencyPercent = (int) Math.ceil(payload.potency());
+        if (potencyPercent <= 0) {
+            return 0;
+        }
+        return Math.max(0, potencyPercent - 1);
     }
 }

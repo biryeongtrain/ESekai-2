@@ -88,6 +88,9 @@ public record SkillConfig(
         if (!Double.isFinite(config.chargeRegen()) || config.chargeRegen() < 0.0) {
             return DataResult.error(() -> "charge_regen must be finite and >= 0");
         }
+        if (config.charges() > 0 && config.chargeRegen() <= 0.0) {
+            return DataResult.error(() -> "charge_regen must be > 0 when charges are enabled");
+        }
 
         return DataResult.success(config);
     }

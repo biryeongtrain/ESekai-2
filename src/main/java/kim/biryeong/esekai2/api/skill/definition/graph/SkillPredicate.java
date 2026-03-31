@@ -11,7 +11,10 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -20,13 +23,19 @@ import java.util.Objects;
  *
  * @param type predicate discriminant
  * @param chance chance payload used by {@link SkillPredicateType#RANDOM_CHANCE}
- * @param effectId mob effect id payload used by {@link SkillPredicateType#HAS_EFFECT}
+ * @param effectId mob effect id shorthand payload used by {@link SkillPredicateType#HAS_EFFECT}
+ * @param effectIds mob effect id list payload used by compound {@link SkillPredicateType#HAS_EFFECT} checks
+ * @param match match policy used by {@link SkillPredicateType#HAS_EFFECT}
+ * @param negate whether {@link SkillPredicateType#HAS_EFFECT} should invert its final result
  * @param subject entity subject inspected by {@link SkillPredicateType#HAS_EFFECT}
  */
 public record SkillPredicate(
         SkillPredicateType type,
         SkillValueExpression chance,
         String effectId,
+        List<String> effectIds,
+        SkillPredicateMatchMode match,
+        boolean negate,
         SkillPredicateSubject subject
 ) {
     private static final Codec<SkillPredicate> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -34,6 +43,10 @@ public record SkillPredicate(
             SkillValueExpression.CODEC.optionalFieldOf("chance", SkillValueExpression.constant(1.0))
                     .forGetter(SkillPredicate::chance),
             Codec.STRING.optionalFieldOf("effect_id", "").forGetter(SkillPredicate::effectId),
+            Codec.STRING.listOf().optionalFieldOf("effect_ids", List.of()).forGetter(SkillPredicate::effectIds),
+            SkillPredicateMatchMode.CODEC.optionalFieldOf("match", SkillPredicateMatchMode.ANY_OF)
+                    .forGetter(SkillPredicate::match),
+            Codec.BOOL.optionalFieldOf("negate", false).forGetter(SkillPredicate::negate),
             SkillPredicateSubject.CODEC.optionalFieldOf("subject", SkillPredicateSubject.PRIMARY_TARGET)
                     .forGetter(SkillPredicate::subject),
             Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("map", Map.of())
@@ -49,7 +62,27 @@ public record SkillPredicate(
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(chance, "chance");
         Objects.requireNonNull(effectId, "effectId");
+        Objects.requireNonNull(effectIds, "effectIds");
+        effectIds = dedupeEffectIds(effectIds);
+        Objects.requireNonNull(match, "match");
         Objects.requireNonNull(subject, "subject");
+    }
+
+    /**
+     * Compatibility constructor retaining the existing typed shorthand surface.
+     *
+     * @param type predicate discriminant
+     * @param chance chance payload
+     * @param effectId mob effect id shorthand
+     * @param subject entity subject
+     */
+    public SkillPredicate(
+            SkillPredicateType type,
+            SkillValueExpression chance,
+            String effectId,
+            SkillPredicateSubject subject
+    ) {
+        this(type, chance, effectId, List.of(), SkillPredicateMatchMode.ANY_OF, false, subject);
     }
 
     /**
@@ -59,7 +92,7 @@ public record SkillPredicate(
      * @param parameters legacy flat parameter map
      */
     public SkillPredicate(SkillPredicateType type, Map<String, String> parameters) {
-        this(type, readChance(parameters), readEffectId(parameters), readSubject(parameters));
+        this(type, readChance(parameters), readEffectId(parameters), readEffectIds(parameters), readMatch(parameters), readNegate(parameters), readSubject(parameters));
     }
 
     /**
@@ -68,7 +101,7 @@ public record SkillPredicate(
      * @return always predicate
      */
     public static SkillPredicate always() {
-        return new SkillPredicate(SkillPredicateType.ALWAYS, SkillValueExpression.constant(1.0), "", SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.ALWAYS, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
     }
 
     /**
@@ -77,7 +110,7 @@ public record SkillPredicate(
      * @return has-target predicate
      */
     public static SkillPredicate hasTarget() {
-        return new SkillPredicate(SkillPredicateType.HAS_TARGET, SkillValueExpression.constant(1.0), "", SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.HAS_TARGET, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
     }
 
     /**
@@ -88,9 +121,36 @@ public record SkillPredicate(
      * @return has-effect predicate
      */
     public static SkillPredicate hasEffect(Identifier effectId, SkillPredicateSubject subject) {
-        Objects.requireNonNull(effectId, "effectId");
+        return hasEffects(List.of(effectId), subject, SkillPredicateMatchMode.ANY_OF, false);
+    }
+
+    /**
+     * Creates a compound target-effect predicate.
+     *
+     * @param effectIds required active effect ids
+     * @param subject entity subject to inspect
+     * @param match compound match mode
+     * @param negate whether to invert the final result
+     * @return has-effect predicate
+     */
+    public static SkillPredicate hasEffects(
+            List<Identifier> effectIds,
+            SkillPredicateSubject subject,
+            SkillPredicateMatchMode match,
+            boolean negate
+    ) {
+        Objects.requireNonNull(effectIds, "effectIds");
         Objects.requireNonNull(subject, "subject");
-        return new SkillPredicate(SkillPredicateType.HAS_EFFECT, SkillValueExpression.constant(1.0), effectId.toString(), subject);
+        Objects.requireNonNull(match, "match");
+
+        List<String> serializedEffectIds = new ArrayList<>(effectIds.size());
+        for (Identifier effectId : effectIds) {
+            Objects.requireNonNull(effectId, "effectId");
+            serializedEffectIds.add(effectId.toString());
+        }
+
+        String shorthandEffectId = serializedEffectIds.size() == 1 ? serializedEffectIds.getFirst() : "";
+        return new SkillPredicate(SkillPredicateType.HAS_EFFECT, SkillValueExpression.constant(1.0), shorthandEffectId, serializedEffectIds, match, negate, subject);
     }
 
     /**
@@ -100,7 +160,7 @@ public record SkillPredicate(
      * @return random chance predicate
      */
     public static SkillPredicate randomChance(SkillValueExpression chance) {
-        return new SkillPredicate(SkillPredicateType.RANDOM_CHANCE, chance, "", SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.RANDOM_CHANCE, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
     }
 
     /**
@@ -113,7 +173,18 @@ public record SkillPredicate(
         if (type == SkillPredicateType.RANDOM_CHANCE) {
             parameters.put("chance", serializeExpression(chance));
         } else if (type == SkillPredicateType.HAS_EFFECT) {
-            parameters.put("effect_id", effectId);
+            List<String> resolvedEffectIds = resolvedEffectIds();
+            if (resolvedEffectIds.size() == 1) {
+                parameters.put("effect_id", resolvedEffectIds.getFirst());
+            } else if (!resolvedEffectIds.isEmpty()) {
+                parameters.put("effect_ids", String.join(",", resolvedEffectIds));
+            }
+            if (match != SkillPredicateMatchMode.ANY_OF) {
+                parameters.put("match", match.serializedName());
+            }
+            if (negate) {
+                parameters.put("negate", Boolean.toString(true));
+            }
             parameters.put("subject", subject.serializedName());
         }
         return Map.copyOf(parameters);
@@ -127,6 +198,9 @@ public record SkillPredicate(
             SkillPredicateType type,
             SkillValueExpression chance,
             String effectId,
+            List<String> effectIds,
+            SkillPredicateMatchMode match,
+            boolean negate,
             SkillPredicateSubject subject,
             Map<String, String> legacyParameters
     ) {
@@ -137,27 +211,45 @@ public record SkillPredicate(
                     chance = legacyChance;
                 }
             }
-            return new SkillPredicate(type, chance, "", SkillPredicateSubject.PRIMARY_TARGET);
+            return new SkillPredicate(type, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
         }
 
         if (type == SkillPredicateType.HAS_EFFECT) {
             if (effectId.isBlank()) {
                 effectId = readEffectId(legacyParameters);
             }
+            if (effectIds.isEmpty()) {
+                effectIds = readEffectIds(legacyParameters);
+            }
+            if (match == SkillPredicateMatchMode.ANY_OF) {
+                match = readMatch(legacyParameters);
+            }
+            if (!negate) {
+                negate = readNegate(legacyParameters);
+            }
             if (subject == SkillPredicateSubject.PRIMARY_TARGET) {
                 subject = readSubject(legacyParameters);
             }
-            return new SkillPredicate(type, SkillValueExpression.constant(1.0), effectId, subject);
+            return new SkillPredicate(type, SkillValueExpression.constant(1.0), effectId, effectIds, match, negate, subject);
         }
 
-        return new SkillPredicate(type, SkillValueExpression.constant(1.0), "", SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(type, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
     }
 
     private static DataResult<SkillPredicate> validate(SkillPredicate predicate) {
         if (predicate.type() == SkillPredicateType.HAS_EFFECT) {
-            if (Identifier.tryParse(predicate.effectId()) == null) {
-                return DataResult.error(() -> "has_effect predicate requires a valid effect_id");
+            List<String> resolvedEffectIds = predicate.resolvedEffectIds();
+            if (resolvedEffectIds.isEmpty()) {
+                return DataResult.error(() -> "has_effect predicate requires effect_id or effect_ids");
             }
+
+            for (String effectId : resolvedEffectIds) {
+                if (Identifier.tryParse(effectId) == null) {
+                    return DataResult.error(() -> "has_effect predicate requires valid effect ids: " + effectId);
+                }
+            }
+        } else if (predicate.match() != SkillPredicateMatchMode.ANY_OF || predicate.negate()) {
+            return DataResult.error(() -> "match and negate are only supported by has_effect predicates");
         }
         return DataResult.success(predicate);
     }
@@ -189,8 +281,8 @@ public record SkillPredicate(
     }
 
     private boolean matchesHasEffect(SkillExecutionContext context) {
-        Identifier parsedEffectId = Identifier.tryParse(effectId);
-        if (parsedEffectId == null) {
+        List<String> resolvedEffectIds = resolvedEffectIds();
+        if (resolvedEffectIds.isEmpty()) {
             return false;
         }
 
@@ -200,6 +292,34 @@ public record SkillPredicate(
             case TARGET -> context.target().orElse(null);
         };
         if (!(entity instanceof LivingEntity livingEntity)) {
+            return false;
+        }
+
+        boolean matches = switch (match) {
+            case ANY_OF -> resolvedEffectIds.stream().anyMatch(effectId -> hasActiveEffect(livingEntity, effectId));
+            case ALL_OF -> resolvedEffectIds.stream().allMatch(effectId -> hasActiveEffect(livingEntity, effectId));
+        };
+        return negate ? !matches : matches;
+    }
+
+    /**
+     * Returns the resolved has-effect target list using {@code effect_ids} first and {@code effect_id} as a shorthand fallback.
+     *
+     * @return resolved ordered effect id list
+     */
+    public List<String> resolvedEffectIds() {
+        if (!effectIds.isEmpty()) {
+            return dedupeEffectIds(effectIds);
+        }
+        if (effectId.isBlank()) {
+            return List.of();
+        }
+        return List.of(effectId);
+    }
+
+    private static boolean hasActiveEffect(LivingEntity livingEntity, String effectId) {
+        Identifier parsedEffectId = Identifier.tryParse(effectId);
+        if (parsedEffectId == null) {
             return false;
         }
 
@@ -229,6 +349,10 @@ public record SkillPredicate(
         return raw == null ? "" : raw;
     }
 
+    private static List<String> readEffectIds(Map<String, String> parameters) {
+        return parseEffectIds(parameters.get("effect_ids"));
+    }
+
     private static SkillPredicateSubject readSubject(Map<String, String> parameters) {
         String raw = parameters.get("subject");
         if (raw == null || raw.isBlank()) {
@@ -241,6 +365,46 @@ public record SkillPredicate(
             }
         }
         return SkillPredicateSubject.PRIMARY_TARGET;
+    }
+
+    private static SkillPredicateMatchMode readMatch(Map<String, String> parameters) {
+        String raw = parameters.get("match");
+        if (raw == null || raw.isBlank()) {
+            return SkillPredicateMatchMode.ANY_OF;
+        }
+
+        SkillPredicateMatchMode match = SkillPredicateMatchMode.fromSerializedName(raw);
+        return match == null ? SkillPredicateMatchMode.ANY_OF : match;
+    }
+
+    private static boolean readNegate(Map<String, String> parameters) {
+        String raw = parameters.get("negate");
+        return raw != null && Boolean.parseBoolean(raw);
+    }
+
+    private static List<String> parseEffectIds(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+
+        List<String> parsed = new ArrayList<>();
+        for (String token : raw.split(",")) {
+            String trimmed = token.trim();
+            if (!trimmed.isEmpty()) {
+                parsed.add(trimmed);
+            }
+        }
+        return dedupeEffectIds(parsed);
+    }
+
+    private static List<String> dedupeEffectIds(List<String> effectIds) {
+        LinkedHashSet<String> deduped = new LinkedHashSet<>(effectIds.size());
+        for (String effectId : effectIds) {
+            if (effectId != null && !effectId.isBlank()) {
+                deduped.add(effectId);
+            }
+        }
+        return List.copyOf(deduped);
     }
 
     private static String serializeExpression(SkillValueExpression expression) {

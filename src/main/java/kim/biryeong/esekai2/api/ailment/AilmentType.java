@@ -3,6 +3,7 @@ package kim.biryeong.esekai2.api.ailment;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -12,7 +13,10 @@ public enum AilmentType {
     IGNITE("ignite"),
     SHOCK("shock"),
     POISON("poison"),
-    BLEED("bleed");
+    BLEED("bleed"),
+    CHILL("chill"),
+    FREEZE("freeze"),
+    STUN("stun");
 
     /**
      * Codec used by skill datapacks and persistent ailment attachments.
@@ -40,7 +44,31 @@ public enum AilmentType {
      * @return {@code true} when the ailment uses the damage-over-time path
      */
     public boolean isDamageOverTime() {
-        return this != SHOCK;
+        return switch (this) {
+            case IGNITE, POISON, BLEED -> true;
+            case SHOCK, CHILL, FREEZE, STUN -> false;
+        };
+    }
+
+    /**
+     * Returns whether this ailment's replacement semantics are driven by numeric potency.
+     *
+     * @return {@code true} when stronger payloads should replace weaker ones
+     */
+    public boolean usesPotency() {
+        return switch (this) {
+            case IGNITE, SHOCK, POISON, BLEED, CHILL -> true;
+            case FREEZE, STUN -> false;
+        };
+    }
+
+    /**
+     * Returns whether this ailment blocks active skill execution while present.
+     *
+     * @return {@code true} when server-side cast execution should no-op
+     */
+    public boolean blocksSkillExecution() {
+        return this == FREEZE || this == STUN;
     }
 
     /**
@@ -53,7 +81,7 @@ public enum AilmentType {
             case IGNITE -> DamageType.FIRE;
             case POISON -> DamageType.CHAOS;
             case BLEED -> DamageType.PHYSICAL;
-            case SHOCK -> null;
+            case SHOCK, CHILL, FREEZE, STUN -> null;
         };
     }
 
@@ -64,6 +92,18 @@ public enum AilmentType {
      */
     public Identifier effectId() {
         return Identifier.fromNamespaceAndPath("esekai2", serializedName);
+    }
+
+    /**
+     * Returns the default replacement policy used when apply_ailment omits an explicit refresh policy.
+     *
+     * @return ailment refresh policy compatible with the ailment's runtime semantics
+     */
+    public SkillAilmentRefreshPolicy defaultRefreshPolicy() {
+        return switch (this) {
+            case IGNITE, SHOCK, POISON, BLEED, CHILL -> SkillAilmentRefreshPolicy.STRONGER_ONLY;
+            case FREEZE, STUN -> SkillAilmentRefreshPolicy.LONGER_ONLY;
+        };
     }
 
     private static DataResult<AilmentType> bySerializedName(String serializedName) {

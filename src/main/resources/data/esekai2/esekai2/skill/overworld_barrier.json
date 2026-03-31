@@ -1,0 +1,32 @@
+{
+  "identifier": "esekai2:overworld_barrier",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 8,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.amethyst_block.hit"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  },
+  "disabled_dims": [
+    "minecraft:overworld"
+  ]
+}

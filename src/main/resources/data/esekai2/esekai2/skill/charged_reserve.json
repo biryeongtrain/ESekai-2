@@ -1,0 +1,31 @@
+{
+  "identifier": "esekai2:charged_reserve",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 6,
+    "cooldown_ticks": 10,
+    "charges": 2,
+    "charge_regen": 1.0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.beacon.power_select"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

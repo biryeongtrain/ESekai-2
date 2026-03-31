@@ -25,6 +25,7 @@
       "kim.biryeong.esekai2.impl.gametest.skill.SkillSupportGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SelectedSkillCastGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillAilmentGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.AilmentControlGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillExternalEffectGameTests",
       "kim.biryeong.esekai2.impl.gametest.monster.MonsterLevelGameTests",
       "kim.biryeong.esekai2.impl.gametest.monster.MonsterStatGameTests",

@@ -11,6 +11,7 @@ import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -42,6 +43,8 @@ public final class SkillDotRuntimeManager {
         }
 
         ServerTickEvents.END_SERVER_TICK.register(SkillDotRuntimeManager::tickServer);
+        ServerLifecycleEvents.SERVER_STARTING.register(server -> ACTIVE.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> ACTIVE.clear());
         bootstrapped = true;
     }
 
@@ -126,6 +129,8 @@ public final class SkillDotRuntimeManager {
             return;
         }
 
+        // PoE-style periodic damage should not be suppressed by Minecraft hit i-frames.
+        target.invulnerableTime = 0;
         target.hurtServer(level, resolveDamageSource(level, activeDot), damage);
     }
 

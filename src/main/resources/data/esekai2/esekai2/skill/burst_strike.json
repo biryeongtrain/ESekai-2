@@ -1,0 +1,30 @@
+{
+  "identifier": "esekai2:burst_strike",
+  "config": {
+    "resource_cost": 0.0,
+    "cast_time_ticks": 4,
+    "cooldown_ticks": 0,
+    "times_to_cast": 2,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.note_block.pling"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

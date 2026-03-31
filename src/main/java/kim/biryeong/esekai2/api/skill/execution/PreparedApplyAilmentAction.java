@@ -2,6 +2,7 @@ package kim.biryeong.esekai2.api.skill.execution;
 
 import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 
 import java.util.List;
 import java.util.Objects;
@@ -14,10 +15,12 @@ public record PreparedApplyAilmentAction(
         double chancePercent,
         int durationTicks,
         double potencyMultiplierPercent,
+        SkillAilmentRefreshPolicy refreshPolicy,
         List<SkillPredicate> enPreds
 ) implements PreparedSkillAction {
     public PreparedApplyAilmentAction {
         Objects.requireNonNull(ailmentType, "ailmentType");
+        Objects.requireNonNull(refreshPolicy, "refreshPolicy");
         Objects.requireNonNull(enPreds, "enPreds");
         enPreds = List.copyOf(enPreds);
         if (!Double.isFinite(chancePercent) || chancePercent < 0.0 || chancePercent > 100.0) {

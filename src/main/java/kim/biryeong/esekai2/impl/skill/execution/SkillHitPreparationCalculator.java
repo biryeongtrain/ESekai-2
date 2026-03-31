@@ -372,13 +372,22 @@ public final class SkillHitPreparationCalculator {
     }
 
     private static PreparedRemoveEffectAction parseRemoveEffect(SkillAction action, List<String> warnings) {
-        Identifier effectId = parseIdentifier(action.effectId());
-        if (effectId == null) {
-            warnings.add("remove_effect action requires a valid effect_id");
+        java.util.LinkedHashSet<Identifier> effectIds = new java.util.LinkedHashSet<>();
+        for (String rawEffectId : action.removeEffectIds()) {
+            Identifier effectId = parseIdentifier(rawEffectId);
+            if (effectId == null) {
+                warnings.add("remove_effect action requires only valid effect ids");
+                return null;
+            }
+            effectIds.add(effectId);
+        }
+
+        if (effectIds.isEmpty() && action.purge().isEmpty()) {
+            warnings.add("remove_effect action requires effect_id, effect_ids, or purge");
             return null;
         }
 
-        return new PreparedRemoveEffectAction(effectId, action.type().serializedName(), action.enPreds());
+        return new PreparedRemoveEffectAction(List.copyOf(effectIds), action.purge(), action.type().serializedName(), action.enPreds());
     }
 
     private static PreparedApplyAilmentAction parseApplyAilment(
@@ -421,6 +430,7 @@ public final class SkillHitPreparationCalculator {
                 Math.min(100.0, chancePercent),
                 durationTicks,
                 potencyMultiplierPercent,
+                action.ailmentRefreshPolicy(),
                 action.enPreds()
         );
     }

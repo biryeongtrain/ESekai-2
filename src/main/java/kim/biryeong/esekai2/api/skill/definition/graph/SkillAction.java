@@ -12,6 +12,8 @@ import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
+import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import net.minecraft.resources.Identifier;
@@ -35,6 +37,8 @@ import java.util.stream.Stream;
  * @param particleId particle id used by sandstorm particle actions
  * @param calculationId datapack-backed damage calculation reference
  * @param effectId mob effect id used by MobEffect actions
+ * @param effectIds mob effect id list used by multi-cleanse remove_effect actions
+ * @param purge broad purge selector used by remove_effect actions
  * @param dotId stable identifier used by damage-over-time actions
  * @param ailmentId stable ailment identifier used by ailment application actions
  * @param hitKind hit kind override used by damage actions
@@ -54,6 +58,7 @@ import java.util.stream.Stream;
  * @param showParticles mob effect particle visibility toggle
  * @param showIcon mob effect icon visibility toggle
  * @param refreshPolicy mob effect refresh or stacking policy
+ * @param ailmentRefreshPolicy ailment refresh or replacement policy
  * @param anchor particle anchor string
  * @param offsetX particle offset x payload
  * @param offsetY particle offset y payload
@@ -69,6 +74,8 @@ public record SkillAction(
         String particleId,
         String calculationId,
         String effectId,
+        List<String> effectIds,
+        Optional<SkillEffectPurgeMode> purge,
         String dotId,
         String ailmentId,
         HitKind hitKind,
@@ -88,6 +95,7 @@ public record SkillAction(
         boolean showParticles,
         boolean showIcon,
         MobEffectRefreshPolicy refreshPolicy,
+        SkillAilmentRefreshPolicy ailmentRefreshPolicy,
         String anchor,
         SkillValueExpression offsetX,
         SkillValueExpression offsetY,
@@ -106,6 +114,11 @@ public record SkillAction(
             map -> map
     );
 
+    private static final Codec<String> REFRESH_POLICY_NAME_CODEC = Codec.STRING.comapFlatMap(
+            SkillAction::validateRefreshPolicyName,
+            value -> value
+    );
+
     private static final MapCodec<IdentityPayload> IDENTITY_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             SkillActionType.CODEC.fieldOf("type").forGetter(IdentityPayload::type),
             Codec.STRING.optionalFieldOf("component_id", "").forGetter(IdentityPayload::componentId),
@@ -115,9 +128,11 @@ public record SkillAction(
             Codec.STRING.optionalFieldOf("particle_id", "").forGetter(IdentityPayload::particleId),
             Codec.STRING.optionalFieldOf("calculation_id", "").forGetter(IdentityPayload::calculationId),
             Codec.STRING.optionalFieldOf("effect_id", "").forGetter(IdentityPayload::effectId),
+            Codec.STRING.listOf().optionalFieldOf("effect_ids", List.of()).forGetter(IdentityPayload::effectIds),
+            SkillEffectPurgeMode.CODEC.optionalFieldOf("purge").forGetter(IdentityPayload::purge),
             Codec.STRING.optionalFieldOf("dot_id", "").forGetter(IdentityPayload::dotId),
             Codec.STRING.optionalFieldOf("ailment_id", "").forGetter(IdentityPayload::ailmentId),
-            MobEffectRefreshPolicy.CODEC.optionalFieldOf("refresh_policy", MobEffectRefreshPolicy.OVERWRITE).forGetter(IdentityPayload::refreshPolicy)
+            REFRESH_POLICY_NAME_CODEC.optionalFieldOf("refresh_policy", "").forGetter(IdentityPayload::refreshPolicy)
     ).apply(instance, IdentityPayload::new));
 
     private static final MapCodec<DamagePayload> DAMAGE_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -182,7 +197,21 @@ public record SkillAction(
     public static final Codec<SkillAction> CODEC = Codec.withAlternative(BASE_CODEC, LEGACY_CODEC).validate(SkillAction::validate);
 
     private IdentityPayload identityPayload() {
-        return new IdentityPayload(type, componentId, entityId, blockId, soundId, particleId, calculationId, effectId, dotId, ailmentId, refreshPolicy);
+        return new IdentityPayload(
+                type,
+                componentId,
+                entityId,
+                blockId,
+                soundId,
+                particleId,
+                calculationId,
+                effectId,
+                effectIds,
+                purge,
+                dotId,
+                ailmentId,
+                serializedRefreshPolicy(type, refreshPolicy, ailmentRefreshPolicy)
+        );
     }
 
     private DamagePayload damagePayload() {
@@ -250,6 +279,14 @@ public record SkillAction(
         String effectId = identity.effectId();
         if (effectId.isBlank()) {
             effectId = readString(legacyParameters, "effect_id");
+        }
+        List<String> effectIds = identity.effectIds();
+        if (effectIds.isEmpty()) {
+            effectIds = parseEffectIds(legacyParameters.get("effect_ids"));
+        }
+        Optional<SkillEffectPurgeMode> purge = identity.purge();
+        if (purge.isEmpty()) {
+            purge = parsePurgeMode(legacyParameters.get("purge"));
         }
 
         String dotId = identity.dotId();
@@ -351,11 +388,14 @@ public record SkillAction(
             showIcon = parseBoolean(legacyShowIcon);
         }
 
-        MobEffectRefreshPolicy refreshPolicy = identity.refreshPolicy();
+        String rawRefreshPolicy = identity.refreshPolicy();
         String legacyRefreshPolicy = readString(legacyParameters, "refresh_policy");
         if (!legacyRefreshPolicy.isBlank()) {
-            refreshPolicy = parseRefreshPolicy(legacyRefreshPolicy);
+            rawRefreshPolicy = legacyRefreshPolicy;
         }
+        AilmentType ailmentType = parseAilmentType(ailmentId);
+        MobEffectRefreshPolicy refreshPolicy = parseMobEffectRefreshPolicy(rawRefreshPolicy);
+        SkillAilmentRefreshPolicy ailmentRefreshPolicy = parseAilmentRefreshPolicy(rawRefreshPolicy, ailmentType);
 
         String anchor = runtime.anchor();
         if (anchor.isBlank() || "self".equals(anchor)) {
@@ -389,6 +429,8 @@ public record SkillAction(
                 particleId,
                 calculationId,
                 effectId,
+                effectIds,
+                purge,
                 dotId,
                 ailmentId,
                 hitKind,
@@ -408,6 +450,7 @@ public record SkillAction(
                 showParticles,
                 showIcon,
                 refreshPolicy,
+                ailmentRefreshPolicy,
                 anchor,
                 offsetX,
                 offsetY,
@@ -444,6 +487,8 @@ public record SkillAction(
         String particleId = readOptionalField(ops, input, "particle_id", Codec.STRING).orElse("");
         String calculationId = readOptionalField(ops, input, "calculation_id", Codec.STRING).orElse("");
         String effectId = readOptionalField(ops, input, "effect_id", Codec.STRING).orElse("");
+        List<String> effectIds = readOptionalField(ops, input, "effect_ids", Codec.STRING.listOf()).orElse(List.of());
+        Optional<SkillEffectPurgeMode> purge = readOptionalField(ops, input, "purge", SkillEffectPurgeMode.CODEC);
         String dotId = readOptionalField(ops, input, "dot_id", Codec.STRING).orElse("");
         String ailmentId = readOptionalField(ops, input, "ailment_id", Codec.STRING).orElse("");
         HitKind hitKind = readOptionalField(ops, input, "hit_kind", HitKind.CODEC).orElse(HitKind.ATTACK);
@@ -472,8 +517,11 @@ public record SkillAction(
         boolean ambient = readOptionalField(ops, input, "ambient", Codec.BOOL).orElse(false);
         boolean showParticles = readOptionalField(ops, input, "show_particles", Codec.BOOL).orElse(true);
         boolean showIcon = readOptionalField(ops, input, "show_icon", Codec.BOOL).orElse(true);
-        MobEffectRefreshPolicy refreshPolicy = readOptionalField(ops, input, "refresh_policy", MobEffectRefreshPolicy.CODEC)
-                .orElse(MobEffectRefreshPolicy.OVERWRITE);
+        String rawRefreshPolicy = readOptionalField(ops, input, "refresh_policy", REFRESH_POLICY_NAME_CODEC)
+                .orElse("");
+        AilmentType ailmentType = parseAilmentType(ailmentId);
+        MobEffectRefreshPolicy refreshPolicy = parseMobEffectRefreshPolicy(rawRefreshPolicy);
+        SkillAilmentRefreshPolicy ailmentRefreshPolicy = parseAilmentRefreshPolicy(rawRefreshPolicy, ailmentType);
         String anchor = readOptionalField(ops, input, "anchor", Codec.STRING).orElse("self");
         SkillValueExpression offsetX = readOptionalField(ops, input, "offset_x", SkillValueExpression.CODEC)
                 .orElse(SkillValueExpression.constant(0.0));
@@ -493,6 +541,8 @@ public record SkillAction(
                 particleId,
                 calculationId,
                 effectId,
+                effectIds,
+                purge,
                 dotId,
                 ailmentId,
                 hitKind,
@@ -512,6 +562,7 @@ public record SkillAction(
                 showParticles,
                 showIcon,
                 refreshPolicy,
+                ailmentRefreshPolicy,
                 anchor,
                 offsetX,
                 offsetY,
@@ -548,6 +599,8 @@ public record SkillAction(
         Objects.requireNonNull(particleId, "particleId");
         Objects.requireNonNull(calculationId, "calculationId");
         Objects.requireNonNull(effectId, "effectId");
+        Objects.requireNonNull(effectIds, "effectIds");
+        Objects.requireNonNull(purge, "purge");
         Objects.requireNonNull(dotId, "dotId");
         Objects.requireNonNull(ailmentId, "ailmentId");
         Objects.requireNonNull(hitKind, "hitKind");
@@ -563,12 +616,22 @@ public record SkillAction(
         Objects.requireNonNull(potencyMultiplier, "potencyMultiplier");
         Objects.requireNonNull(tickIntervalTicks, "tickIntervalTicks");
         Objects.requireNonNull(refreshPolicy, "refreshPolicy");
+        Objects.requireNonNull(ailmentRefreshPolicy, "ailmentRefreshPolicy");
         Objects.requireNonNull(anchor, "anchor");
         Objects.requireNonNull(offsetX, "offsetX");
         Objects.requireNonNull(offsetY, "offsetY");
         Objects.requireNonNull(offsetZ, "offsetZ");
         Objects.requireNonNull(enPreds, "enPreds");
         baseDamage = Map.copyOf(baseDamage);
+        effectIds = effectIds.stream()
+                .filter(entry -> entry != null && !entry.isBlank())
+                .distinct()
+                .toList();
+        if (!effectIds.isEmpty()) {
+            effectId = effectIds.getFirst();
+        } else if (!effectId.isBlank()) {
+            effectIds = List.of(effectId);
+        }
         enPreds = List.copyOf(enPreds);
     }
 
@@ -599,6 +662,8 @@ public record SkillAction(
                 readString(parameters, "particle_id"),
                 calculationId == null || calculationId.isBlank() ? readString(parameters, "calculation_id") : calculationId,
                 readString(parameters, "effect_id"),
+                parseEffectIds(parameters.get("effect_ids")),
+                parsePurgeMode(parameters.get("purge")),
                 readString(parameters, "dot_id"),
                 readString(parameters, "ailment_id"),
                 parseHitKind(readString(parameters, "hit_kind")),
@@ -617,7 +682,8 @@ public record SkillAction(
                 parseBoolean(parameters.get("ambient")),
                 !parameters.containsKey("show_particles") || parseBoolean(parameters.get("show_particles")),
                 !parameters.containsKey("show_icon") || parseBoolean(parameters.get("show_icon")),
-                parseRefreshPolicy(readString(parameters, "refresh_policy", MobEffectRefreshPolicy.OVERWRITE.serializedName())),
+                parseMobEffectRefreshPolicy(readString(parameters, "refresh_policy", MobEffectRefreshPolicy.OVERWRITE.serializedName())),
+                parseAilmentRefreshPolicy(readString(parameters, "refresh_policy"), parseAilmentType(readString(parameters, "ailment_id"))),
                 readString(parameters, "anchor", "self"),
                 parseExpression(parameters, "offset_x", 0.0),
                 parseExpression(parameters, "offset_y", 0.0),
@@ -643,6 +709,8 @@ public record SkillAction(
                 "",
                 "",
                 "",
+                List.of(),
+                Optional.empty(),
                 "",
                 "",
                 HitKind.ATTACK,
@@ -662,6 +730,7 @@ public record SkillAction(
                 true,
                 true,
                 MobEffectRefreshPolicy.OVERWRITE,
+                SkillAilmentRefreshPolicy.OVERWRITE,
                 "self",
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(0.0),
@@ -687,6 +756,8 @@ public record SkillAction(
                 "",
                 calculationId.toString(),
                 "",
+                List.of(),
+                Optional.empty(),
                 "",
                 "",
                 HitKind.ATTACK,
@@ -706,6 +777,7 @@ public record SkillAction(
                 true,
                 true,
                 MobEffectRefreshPolicy.OVERWRITE,
+                SkillAilmentRefreshPolicy.OVERWRITE,
                 "self",
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(0.0),
@@ -748,6 +820,8 @@ public record SkillAction(
                 particleId,
                 calculationId,
                 "",
+                List.of(),
+                Optional.empty(),
                 "",
                 "",
                 hitKind,
@@ -767,6 +841,7 @@ public record SkillAction(
                 true,
                 true,
                 MobEffectRefreshPolicy.OVERWRITE,
+                SkillAilmentRefreshPolicy.OVERWRITE,
                 anchor,
                 offsetX,
                 offsetY,
@@ -805,6 +880,10 @@ public record SkillAction(
         if (!effectId.isBlank()) {
             parameters.put("effect_id", effectId);
         }
+        if (!effectIds.isEmpty()) {
+            parameters.put("effect_ids", String.join(",", effectIds));
+        }
+        purge.ifPresent(mode -> parameters.put("purge", mode.serializedName()));
         if (!dotId.isBlank()) {
             parameters.put("dot_id", dotId);
         }
@@ -816,7 +895,7 @@ public record SkillAction(
         parameters.put("ambient", Boolean.toString(ambient));
         parameters.put("show_particles", Boolean.toString(showParticles));
         parameters.put("show_icon", Boolean.toString(showIcon));
-        parameters.put("refresh_policy", refreshPolicy.serializedName());
+        parameters.put("refresh_policy", serializedRefreshPolicy(type, refreshPolicy, ailmentRefreshPolicy));
         parameters.put("anchor", anchor);
         parameters.put("volume", serializeExpression(volume));
         parameters.put("pitch", serializeExpression(pitch));
@@ -850,6 +929,11 @@ public record SkillAction(
         if (!action.effectId().isBlank() && Identifier.tryParse(action.effectId()) == null) {
             return DataResult.error(() -> "effect_id must be a valid identifier: " + action.effectId());
         }
+        for (String effectId : action.effectIds()) {
+            if (Identifier.tryParse(effectId) == null) {
+                return DataResult.error(() -> "effect_ids entries must be valid identifiers: " + effectId);
+            }
+        }
 
         if (action.type() == SkillActionType.SOUND && Identifier.tryParse(action.soundId()) == null) {
             return DataResult.error(() -> "sound action requires a valid sound_id");
@@ -858,12 +942,35 @@ public record SkillAction(
         if ((action.type() == SkillActionType.APPLY_EFFECT
                 || action.type() == SkillActionType.APPLY_BUFF
                 || action.type() == SkillActionType.REMOVE_EFFECT)
+                && action.type() != SkillActionType.REMOVE_EFFECT
                 && Identifier.tryParse(action.effectId()) == null) {
             return DataResult.error(() -> action.type().serializedName() + " action requires a valid effect_id");
         }
 
+        if (action.purge().isPresent() && action.type() != SkillActionType.REMOVE_EFFECT) {
+            return DataResult.error(() -> "purge is only supported by remove_effect actions");
+        }
+
+        if (action.type() == SkillActionType.REMOVE_EFFECT
+                && action.removeEffectIds().isEmpty()
+                && action.purge().isEmpty()) {
+            return DataResult.error(() -> "remove_effect action requires effect_id, effect_ids, or purge");
+        }
+
         if (action.type() == SkillActionType.APPLY_AILMENT && parseAilmentType(action.ailmentId()) == null) {
             return DataResult.error(() -> "apply_ailment action requires a valid ailment_id");
+        }
+
+        if ((action.type() == SkillActionType.APPLY_EFFECT || action.type() == SkillActionType.APPLY_BUFF)
+                && action.refreshPolicy() == null) {
+            return DataResult.error(() -> action.type().serializedName() + " action requires a valid refresh_policy");
+        }
+
+        if (action.type() == SkillActionType.APPLY_AILMENT && action.ailmentRefreshPolicy() == null) {
+            return DataResult.error(() -> "apply_ailment action requires a valid refresh_policy");
+        }
+        if (action.type() == SkillActionType.APPLY_AILMENT && action.refreshPolicy() == MobEffectRefreshPolicy.ADD_DURATION) {
+            return DataResult.error(() -> "apply_ailment refresh_policy does not support add_duration");
         }
 
         if (action.type() == SkillActionType.APPLY_DOT && action.dotId().isBlank()) {
@@ -920,6 +1027,20 @@ public record SkillAction(
             return fallback;
         }
         return value;
+    }
+
+    private static List<String> parseEffectIds(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(entry -> !entry.isBlank())
+                .toList();
+    }
+
+    private static Optional<SkillEffectPurgeMode> parsePurgeMode(String raw) {
+        return Optional.ofNullable(SkillEffectPurgeMode.fromSerializedName(raw));
     }
 
     private static boolean parseBoolean(String raw) {
@@ -994,7 +1115,21 @@ public record SkillAction(
         return null;
     }
 
-    private static MobEffectRefreshPolicy parseRefreshPolicy(String raw) {
+    private static DataResult<String> validateRefreshPolicyName(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return DataResult.success("");
+        }
+        if (MobEffectRefreshPolicy.OVERWRITE.serializedName().equals(raw)
+                || MobEffectRefreshPolicy.LONGER_ONLY.serializedName().equals(raw)
+                || MobEffectRefreshPolicy.ADD_DURATION.serializedName().equals(raw)
+                || SkillAilmentRefreshPolicy.STRONGER_ONLY.serializedName().equals(raw)
+                || SkillAilmentRefreshPolicy.LONGER_ONLY.serializedName().equals(raw)) {
+            return DataResult.success(raw);
+        }
+        return DataResult.error(() -> "Unknown refresh_policy: " + raw);
+    }
+
+    private static MobEffectRefreshPolicy parseMobEffectRefreshPolicy(String raw) {
         if (raw == null || raw.isBlank()) {
             return MobEffectRefreshPolicy.OVERWRITE;
         }
@@ -1004,6 +1139,28 @@ public record SkillAction(
             }
         }
         return MobEffectRefreshPolicy.OVERWRITE;
+    }
+
+    private static SkillAilmentRefreshPolicy parseAilmentRefreshPolicy(String raw, AilmentType ailmentType) {
+        SkillAilmentRefreshPolicy parsed = SkillAilmentRefreshPolicy.fromSerializedName(raw);
+        if (parsed != null) {
+            return parsed;
+        }
+        if (ailmentType != null) {
+            return SkillAilmentRefreshPolicy.defaultFor(ailmentType);
+        }
+        return SkillAilmentRefreshPolicy.OVERWRITE;
+    }
+
+    private static String serializedRefreshPolicy(
+            SkillActionType type,
+            MobEffectRefreshPolicy refreshPolicy,
+            SkillAilmentRefreshPolicy ailmentRefreshPolicy
+    ) {
+        if (type == SkillActionType.APPLY_AILMENT) {
+            return ailmentRefreshPolicy.serializedName();
+        }
+        return refreshPolicy.serializedName();
     }
 
     private static String serializeExpression(SkillValueExpression expression) {
@@ -1020,6 +1177,21 @@ public record SkillAction(
         return expression.isConstant() && Double.compare(expression.constant(), defaultValue) == 0;
     }
 
+    /**
+     * Returns the resolved remove-effect target list using `effect_ids` first and `effect_id` as a shorthand fallback.
+     *
+     * @return ordered list of configured remove targets
+     */
+    public List<String> removeEffectIds() {
+        if (!effectIds.isEmpty()) {
+            return effectIds;
+        }
+        if (!effectId.isBlank()) {
+            return List.of(effectId);
+        }
+        return List.of();
+    }
+
     private record IdentityPayload(
             SkillActionType type,
             String componentId,
@@ -1029,9 +1201,11 @@ public record SkillAction(
             String particleId,
             String calculationId,
             String effectId,
+            List<String> effectIds,
+            Optional<SkillEffectPurgeMode> purge,
             String dotId,
             String ailmentId,
-            MobEffectRefreshPolicy refreshPolicy
+            String refreshPolicy
     ) {
     }
 

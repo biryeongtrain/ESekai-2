@@ -1,0 +1,32 @@
+{
+  "identifier": "esekai2:burst_reserve",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 4,
+    "cooldown_ticks": 5,
+    "times_to_cast": 2,
+    "charges": 2,
+    "charge_regen": 1.0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.respawn_anchor.charge"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

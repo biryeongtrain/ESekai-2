@@ -4,6 +4,11 @@ import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
+import kim.biryeong.esekai2.api.player.resource.PlayerResources;
+import kim.biryeong.esekai2.api.player.skill.PlayerSkillBurstState;
+import kim.biryeong.esekai2.api.player.skill.PlayerSkillBursts;
+import kim.biryeong.esekai2.api.player.skill.PlayerSkillCharges;
+import kim.biryeong.esekai2.api.player.skill.PlayerSkillCooldowns;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationLookup;
 import kim.biryeong.esekai2.api.skill.definition.SkillAttached;
@@ -15,6 +20,7 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillCondition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillConditionType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateMatchMode;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateSubject;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
@@ -29,6 +35,12 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportEffect;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportRuleAppend;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportRuleAppendTarget;
+import kim.biryeong.esekai2.api.skill.support.SkillSupportRuleTargetType;
+import kim.biryeong.esekai2.api.skill.tag.SkillTagCondition;
 import kim.biryeong.esekai2.api.skill.stat.SkillStats;
 import kim.biryeong.esekai2.api.stat.combat.CombatStats;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
@@ -45,6 +57,8 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -65,6 +79,13 @@ import java.util.Set;
 public final class SkillExecutionGameTests {
     private static final Identifier BASIC_STRIKE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "basic_strike");
     private static final Identifier FIREBALL_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "fireball");
+    private static final Identifier BATTLE_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "battle_focus");
+    private static final Identifier BURST_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "burst_focus");
+    private static final Identifier BURST_STRIKE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "burst_strike");
+    private static final Identifier BURST_RESERVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "burst_reserve");
+    private static final Identifier CHARGED_SURGE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_surge");
+    private static final Identifier CHARGED_RESERVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_reserve");
+    private static final Identifier OVERWORLD_BARRIER_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "overworld_barrier");
 
     /**
      * Verifies that the skill registry loads the sample definition set used by these runtime tests.
@@ -75,6 +96,11 @@ public final class SkillExecutionGameTests {
 
         helper.assertTrue(registry.containsKey(BASIC_STRIKE_SKILL_ID), "Basic strike should load into the skill registry");
         helper.assertTrue(registry.containsKey(FIREBALL_SKILL_ID), "Fireball should load into the skill registry");
+        helper.assertTrue(registry.containsKey(BURST_FOCUS_SKILL_ID), "Burst focus should load into the skill registry");
+        helper.assertTrue(registry.containsKey(BURST_STRIKE_SKILL_ID), "Burst strike should load into the skill registry");
+        helper.assertTrue(registry.containsKey(BURST_RESERVE_SKILL_ID), "Burst reserve should load into the skill registry");
+        helper.assertTrue(registry.containsKey(CHARGED_SURGE_SKILL_ID), "Charged surge should load into the skill registry");
+        helper.assertTrue(registry.containsKey(CHARGED_RESERVE_SKILL_ID), "Charged reserve should load into the skill registry");
         helper.succeed();
     }
 
@@ -146,6 +172,32 @@ public final class SkillExecutionGameTests {
     }
 
     /**
+     * Verifies that compound has_effect predicates preserve effect_ids, match mode, negate, and subject through codec round-trip.
+     */
+    @GameTest
+    public void compoundHasEffectPredicateCodecRoundTrips(GameTestHelper helper) {
+        SkillPredicate predicate = SkillPredicate.hasEffects(
+                List.of(
+                        Identifier.fromNamespaceAndPath("minecraft", "speed"),
+                        Identifier.fromNamespaceAndPath("esekai2", "poison")
+                ),
+                SkillPredicateSubject.TARGET,
+                SkillPredicateMatchMode.ALL_OF,
+                true
+        );
+
+        SkillPredicate decoded = SkillPredicate.CODEC.parse(
+                JsonOps.INSTANCE,
+                SkillPredicate.CODEC.encodeStart(JsonOps.INSTANCE, predicate)
+                        .getOrThrow(message -> new IllegalStateException("Failed to encode compound has_effect predicate: " + message))
+        ).getOrThrow(message -> new IllegalStateException("Failed to decode compound has_effect predicate: " + message));
+
+        helper.assertValueEqual(decoded, predicate, "Compound has_effect codec should preserve effect_ids, match mode, negate, and subject");
+        helper.assertValueEqual(decoded.resolvedEffectIds(), predicate.resolvedEffectIds(), "Compound has_effect codec should preserve the ordered deduplicated effect id list");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that has_effect predicates reject invalid effect identifiers during codec validation.
      */
     @GameTest
@@ -156,6 +208,61 @@ public final class SkillExecutionGameTests {
                     JsonOps.INSTANCE.createString("effect_id"), JsonOps.INSTANCE.createString("not a valid id")
             ))).getOrThrow(message -> new IllegalStateException("Expected has_effect validation to fail: " + message));
             throw helper.assertionException("has_effect predicates should reject invalid effect ids");
+        } catch (IllegalStateException expected) {
+            helper.succeed();
+        }
+    }
+
+    /**
+     * Verifies that has_effect predicates reject an empty compound effect list during codec validation.
+     */
+    @GameTest
+    public void hasEffectPredicateRejectsEmptyEffectList(GameTestHelper helper) {
+        try {
+            SkillPredicate.CODEC.parse(JsonOps.INSTANCE, JsonOps.INSTANCE.createMap(Map.of(
+                    JsonOps.INSTANCE.createString("type"), JsonOps.INSTANCE.createString("has_effect"),
+                    JsonOps.INSTANCE.createString("effect_ids"), JsonOps.INSTANCE.createList(java.util.stream.Stream.<com.google.gson.JsonElement>empty())
+            ))).getOrThrow(message -> new IllegalStateException("Expected empty has_effect effect_ids validation to fail: " + message));
+            throw helper.assertionException("has_effect predicates should reject an empty effect_ids list");
+        } catch (IllegalStateException expected) {
+            helper.succeed();
+        }
+    }
+
+    /**
+     * Verifies that has_effect predicates reject invalid compound match values during codec validation.
+     */
+    @GameTest
+    public void hasEffectPredicateRejectsInvalidMatchMode(GameTestHelper helper) {
+        try {
+            SkillPredicate.CODEC.parse(JsonOps.INSTANCE, JsonOps.INSTANCE.createMap(Map.of(
+                    JsonOps.INSTANCE.createString("type"), JsonOps.INSTANCE.createString("has_effect"),
+                    JsonOps.INSTANCE.createString("effect_ids"), JsonOps.INSTANCE.createList(List.of(
+                            JsonOps.INSTANCE.createString("minecraft:speed"),
+                            JsonOps.INSTANCE.createString("minecraft:slowness")
+                    ).stream()),
+                    JsonOps.INSTANCE.createString("match"), JsonOps.INSTANCE.createString("not_a_match")
+            ))).getOrThrow(message -> new IllegalStateException("Expected has_effect match validation to fail: " + message));
+            throw helper.assertionException("has_effect predicates should reject invalid match modes");
+        } catch (IllegalStateException expected) {
+            helper.succeed();
+        }
+    }
+
+    /**
+     * Verifies that has_effect predicates reject invalid identifiers inside effect_ids during codec validation.
+     */
+    @GameTest
+    public void hasEffectPredicateRejectsInvalidEffectIdInEffectIds(GameTestHelper helper) {
+        try {
+            SkillPredicate.CODEC.parse(JsonOps.INSTANCE, JsonOps.INSTANCE.createMap(Map.of(
+                    JsonOps.INSTANCE.createString("type"), JsonOps.INSTANCE.createString("has_effect"),
+                    JsonOps.INSTANCE.createString("effect_ids"), JsonOps.INSTANCE.createList(List.of(
+                            JsonOps.INSTANCE.createString("minecraft:speed"),
+                            JsonOps.INSTANCE.createString("not a valid id")
+                    ).stream())
+            ))).getOrThrow(message -> new IllegalStateException("Expected compound has_effect effect_ids validation to fail: " + message));
+            throw helper.assertionException("has_effect predicates should reject invalid effect_ids entries");
         } catch (IllegalStateException expected) {
             helper.succeed();
         }
@@ -856,6 +963,207 @@ public final class SkillExecutionGameTests {
     }
 
     /**
+     * Verifies that target-subject any_of has_effect predicates match when any configured target effect is present.
+     */
+    @GameTest
+    public void hasEffectEnPredAnyOfUsesTargetSubject(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_any_of_target_subject",
+                List.of(new SkillRule(
+                        Set.of(new SkillTargetSelector(SkillTargetType.TARGET, Map.of())),
+                        List.of(soundAction("minecraft:block.note_block.chime")),
+                        List.of(),
+                        List.of(SkillPredicate.hasEffects(
+                                List.of(
+                                        Identifier.fromNamespaceAndPath("minecraft", "speed"),
+                                        Identifier.fromNamespaceAndPath("minecraft", "slowness")
+                                ),
+                                SkillPredicateSubject.TARGET,
+                                SkillPredicateMatchMode.ANY_OF,
+                                false
+                        ))
+                )),
+                Map.of()
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(1.0, 2.0, 4.0));
+
+        SkillExecutionResult withoutTarget = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult withoutEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("minecraft", "slowness")));
+
+        SkillExecutionResult withOneMatchingEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(withoutTarget.executedActions(), 0, "Target-subject has_effect should fail when the cast has no target");
+        helper.assertValueEqual(withoutEffects.executedActions(), 0, "Target-subject any_of has_effect should fail when the target has none of the configured effects");
+        helper.assertValueEqual(withOneMatchingEffect.executedActions(), 1, "Target-subject any_of has_effect should pass when the target has one configured effect");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that primary-target all_of has_effect predicates require every configured effect, including built-in ailment identities.
+     */
+    @GameTest
+    public void hasEffectEnPredAllOfUsesPrimaryTargetAndAilmentIdentity(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_all_of_primary_target",
+                List.of(),
+                Map.of(
+                        "spell_cast_component",
+                        List.of(new SkillRule(
+                                Set.of(new SkillTargetSelector(SkillTargetType.TARGET, Map.of())),
+                                List.of(soundAction("minecraft:block.note_block.flute")),
+                                List.of(new SkillCondition(SkillConditionType.ON_SPELL_CAST, Map.of())),
+                                List.of(SkillPredicate.hasEffects(
+                                        List.of(
+                                                Identifier.fromNamespaceAndPath("minecraft", "slowness"),
+                                                Identifier.fromNamespaceAndPath("esekai2", "poison")
+                                        ),
+                                        SkillPredicateSubject.PRIMARY_TARGET,
+                                        SkillPredicateMatchMode.ALL_OF,
+                                        false
+                                ))
+                        ))
+                )
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(1.0, 2.0, 4.0));
+
+        SkillExecutionResult withoutEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("minecraft", "slowness")));
+
+        SkillExecutionResult withOnlyVanillaEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("esekai2", "poison")));
+
+        SkillExecutionResult withAllRequiredEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(withoutEffects.executedActions(), 0, "Primary-target all_of has_effect should fail when the target has none of the configured effects");
+        helper.assertValueEqual(withOnlyVanillaEffect.executedActions(), 0, "Primary-target all_of has_effect should fail until every configured effect is active");
+        helper.assertValueEqual(withAllRequiredEffects.executedActions(), 1, "Primary-target all_of has_effect should pass when both the vanilla effect and ailment identity are active");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that self-subject negate has_effect predicates invert the final compound match result.
+     */
+    @GameTest
+    public void hasEffectEnPredNegateInvertsCompoundSelfMatch(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_negate_self",
+                List.of(new SkillRule(
+                        Set.of(new SkillTargetSelector(SkillTargetType.SELF, Map.of())),
+                        List.of(soundAction("minecraft:block.note_block.bit")),
+                        List.of(),
+                        List.of(SkillPredicate.hasEffects(
+                                List.of(
+                                        Identifier.fromNamespaceAndPath("minecraft", "speed"),
+                                        Identifier.fromNamespaceAndPath("minecraft", "slowness")
+                                ),
+                                SkillPredicateSubject.SELF,
+                                SkillPredicateMatchMode.ANY_OF,
+                                true
+                        ))
+                )),
+                Map.of()
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        SkillExecutionResult withoutEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        caster.addEffect(effect(helper, Identifier.fromNamespaceAndPath("minecraft", "speed")));
+
+        SkillExecutionResult withMatchingEffect = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(withoutEffects.executedActions(), 1, "Negated self any_of has_effect should pass when the caster lacks every configured effect");
+        helper.assertValueEqual(withMatchingEffect.executedActions(), 0, "Negated self any_of has_effect should fail when the caster gains one configured effect");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that target-subject has_effect predicates can gate generic apply_dot actions on the runtime execution path.
+     */
+    @GameTest
+    public void hasEffectPredicateGatesApplyDotRuntimeExecution(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:test_has_effect_apply_dot_runtime",
+                List.of(new SkillRule(
+                        Set.of(new SkillTargetSelector(SkillTargetType.TARGET, Map.of())),
+                        List.of(new SkillAction(SkillActionType.APPLY_DOT, Map.of(
+                                "dot_id", "predicate_runtime_dot",
+                                "duration_ticks", "8",
+                                "tick_interval", "2",
+                                "base_damage_fire", "4.0"
+                        ))),
+                        List.of(),
+                        List.of(SkillPredicate.hasEffect(
+                                Identifier.fromNamespaceAndPath("minecraft", "slowness"),
+                                SkillPredicateSubject.TARGET
+                        ))
+                )),
+                Map.of()
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(skill, new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0));
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
+
+        SkillExecutionResult gatedOff = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
+        );
+
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("minecraft", "slowness")));
+        float healthBeforePassingCast = zombie.getHealth();
+
+        SkillExecutionResult passing = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
+        );
+
+        helper.assertValueEqual(gatedOff.executedActions(), 0, "Generic apply_dot should not execute when the target lacks the required predicate effect");
+        helper.assertValueEqual(passing.executedActions(), 1, "Generic apply_dot should execute once the target gains the required predicate effect");
+        helper.runAfterDelay(3, () -> {
+            helper.assertTrue(zombie.getHealth() < healthBeforePassingCast,
+                    "A predicate-approved apply_dot should still register runtime damage ticks");
+            helper.succeed();
+        });
+    }
+
+    /**
      * Verifies that has_effect predicates can match built-in ailment effect identities.
      */
     @GameTest
@@ -882,6 +1190,637 @@ public final class SkillExecutionGameTests {
 
         SkillExecutionContext contextWithEffect = SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty());
         helper.assertTrue(predicate.matches(contextWithEffect), "Poison has_effect should pass when the caster has the built-in ailment identity");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that support-appended on-cast rules can use compound has_effect predicates after support merging.
+     */
+    @GameTest
+    public void supportAppendedOnCastRuleUsesCompoundHasEffectPredicate(GameTestHelper helper) {
+        SkillSupportDefinition support = new SkillSupportDefinition(
+                "esekai2:test_compound_has_effect_support",
+                List.of(new SkillSupportEffect(
+                        new SkillTagCondition(Set.of(), Set.of()),
+                        Set.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(new SkillSupportRuleAppend(
+                                new SkillSupportRuleAppendTarget(SkillSupportRuleTargetType.ON_CAST, ""),
+                                List.of(new SkillRule(
+                                        Set.of(new SkillTargetSelector(SkillTargetType.TARGET, Map.of())),
+                                        List.of(soundAction("minecraft:block.note_block.harp")),
+                                        List.of(new SkillCondition(SkillConditionType.ON_SPELL_CAST, Map.of())),
+                                        List.of(SkillPredicate.hasEffects(
+                                                List.of(
+                                                        Identifier.fromNamespaceAndPath("minecraft", "slowness"),
+                                                        Identifier.fromNamespaceAndPath("esekai2", "poison")
+                                                ),
+                                                SkillPredicateSubject.TARGET,
+                                                SkillPredicateMatchMode.ALL_OF,
+                                                false
+                                        ))
+                                ))
+                        ))
+                ))
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                fireball(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support))
+        );
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(1.0, 2.0, 4.0));
+
+        RecordingHooks withoutAllRequiredEffectsHooks = new RecordingHooks();
+        SkillExecutionResult withoutAllRequiredEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                withoutAllRequiredEffectsHooks
+        );
+
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("minecraft", "slowness")));
+        zombie.addEffect(effect(helper, Identifier.fromNamespaceAndPath("esekai2", "poison")));
+
+        RecordingHooks withAllRequiredEffectsHooks = new RecordingHooks();
+        SkillExecutionResult withAllRequiredEffects = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie)),
+                withAllRequiredEffectsHooks
+        );
+
+        helper.assertTrue(withoutAllRequiredEffects.executedActions() > 0,
+                "Base fireball actions should still execute when the support-appended compound rule is gated off");
+        helper.assertValueEqual(withAllRequiredEffects.executedActions() - withoutAllRequiredEffects.executedActions(), 1,
+                "Compound has_effect support gating should add exactly one appended action once all configured target effects are active");
+        helper.assertValueEqual(withAllRequiredEffectsHooks.soundCount() - withoutAllRequiredEffectsHooks.soundCount(), 1,
+                "Compound has_effect support gating should add exactly one appended sound action once all configured target effects are active");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct executeOnCast blocks skills disabled in the current dimension before any runtime actions execute.
+     */
+    @GameTest
+    public void executeOnCastBlocksDisabledDimensionSkillDefinitions(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, OVERWORLD_BARRIER_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        caster.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty()),
+                hooks
+        );
+
+        helper.assertValueEqual(result.executedActions(), 0, "Disabled-dimension skills should be blocked before runtime actions execute");
+        helper.assertValueEqual(hooks.soundCount(), 0, "Disabled-dimension direct casts should not emit on-cast sound actions");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("dimension")),
+                "Disabled-dimension direct casts should surface a warning");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast starts and enforces cooldown state for positive-cooldown skills.
+     */
+    @GameTest
+    public void executeOnCastBlocksPlayerCooldownWhileSkillIsCoolingDown(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        RecordingHooks firstHooks = new RecordingHooks();
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                firstHooks
+        );
+
+        RecordingHooks secondHooks = new RecordingHooks();
+        SkillExecutionResult second = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                secondHooks
+        );
+
+        helper.assertTrue(first.executedActions() > 0, "The first direct player-sourced cast should execute successfully");
+        helper.assertTrue(PlayerSkillCooldowns.isOnCooldown(player, BATTLE_FOCUS_SKILL_ID, helper.getLevel().getGameTime()),
+                "The first direct player-sourced cast should start cooldown state");
+        helper.assertValueEqual(second.executedActions(), 0, "Cooldown-active direct casts should be blocked before runtime actions execute");
+        helper.assertValueEqual(secondHooks.soundCount(), 0, "Cooldown-blocked direct casts should not emit on-cast sound actions");
+        helper.assertTrue(second.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
+                "Cooldown-blocked direct casts should surface a warning");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast spends mana only when the attacker mana stat is positive.
+     */
+    @GameTest
+    public void executeOnCastSpendsManaForPositiveManaPlayerSources(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                fireball(helper),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.99)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                hooks
+        );
+
+        helper.assertTrue(result.executedActions() > 0, "Positive-mana direct player casts should execute when enough mana is available");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 8.0, "Successful positive-mana direct casts should spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast blocks for insufficient mana only when the attacker mana stat is positive.
+     */
+    @GameTest
+    public void executeOnCastBlocksInsufficientPositiveManaPlayerSources(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                fireball(helper),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.99)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 5.0, 20.0);
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                hooks
+        );
+
+        helper.assertValueEqual(result.executedActions(), 0, "Positive-mana direct player casts should be blocked when current mana is insufficient");
+        helper.assertValueEqual(hooks.soundCount(), 0, "Insufficient-mana direct casts should not emit on-cast sound actions");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("mana")),
+                "Insufficient positive-mana direct casts should surface a warning");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 5.0, "Blocked positive-mana direct casts should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast spends one stored charge on a successful charged cast.
+     */
+    @GameTest
+    public void executeOnCastSpendsDirectPlayerChargeOnSuccessfulCast(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_SURGE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        RecordingHooks firstHooks = new RecordingHooks();
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                firstHooks
+        );
+
+        RecordingHooks secondHooks = new RecordingHooks();
+        SkillExecutionResult second = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                secondHooks
+        );
+
+        helper.assertTrue(first.executedActions() > 0, "The first charged direct cast should execute successfully");
+        helper.assertValueEqual(firstHooks.soundCount(), 1, "The first charged direct cast should execute its on-cast sound action once");
+        helper.assertValueEqual(second.executedActions(), 0, "A second immediate charged cast should fail after the only stored charge is spent");
+        helper.assertValueEqual(secondHooks.soundCount(), 0, "Charge-blocked direct casts should not emit on-cast sound actions");
+        helper.assertTrue(second.warnings().stream().anyMatch(warning -> warning.contains("charge")),
+                "Charge-blocked direct casts should surface a charge warning");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast blocks when a charged skill has no stored charges remaining.
+     */
+    @GameTest
+    public void executeOnCastBlocksDirectPlayerCastAtZeroCharges(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_SURGE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        RecordingHooks blockedHooks = new RecordingHooks();
+        SkillExecutionResult blocked = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                blockedHooks
+        );
+
+        helper.assertValueEqual(blocked.executedActions(), 0, "Zero-charge direct casts should be blocked before runtime actions execute");
+        helper.assertValueEqual(blockedHooks.soundCount(), 0, "Zero-charge direct casts should not emit on-cast sound actions");
+        helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("charge")),
+                "Zero-charge direct casts should surface a charge warning");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast can consume a regenerated charge after enough game time has elapsed.
+     */
+    @GameTest
+    public void executeOnCastRestoresDirectPlayerChargeAfterTimeAdvance(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_SURGE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.runAfterDelay(11, () -> {
+            RecordingHooks regenHooks = new RecordingHooks();
+            SkillExecutionResult regenerated = Skills.executeOnCast(
+                    SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                    regenHooks
+            );
+
+            helper.assertTrue(regenerated.executedActions() > 0, "A regenerated charged cast should execute successfully after enough time has elapsed");
+            helper.assertValueEqual(regenHooks.soundCount(), 1, "A regenerated charged cast should execute its on-cast sound action once");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast treats stored charges and cooldown as separate gates on the same charged skill.
+     */
+    @GameTest
+    public void executeOnCastKeepsDirectPlayerChargesAvailableAcrossCooldownExpiry(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_RESERVE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult blockedByCooldown = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertTrue(first.executedActions() > 0, "The first charged cooldown cast should execute successfully");
+        helper.assertTrue(blockedByCooldown.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
+                "An immediate recast should be blocked by cooldown before the remaining stored charge is used");
+
+        helper.runAfterDelay(11, () -> {
+            RecordingHooks postCooldownHooks = new RecordingHooks();
+            SkillExecutionResult afterCooldown = Skills.executeOnCast(
+                    SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                    postCooldownHooks
+            );
+
+            helper.assertTrue(afterCooldown.executedActions() > 0,
+                    "Once cooldown expires, the next cast should still succeed because another stored charge remains");
+            helper.assertValueEqual(postCooldownHooks.soundCount(), 1,
+                    "The post-cooldown charged cast should execute its on-cast sound action once");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Verifies that cooldown-blocked charged casts do not spend mana until a later cast actually executes.
+     */
+    @GameTest
+    public void executeOnCastDoesNotSpendManaWhenCooldownBlocksChargedCast(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_RESERVE_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult blockedByCooldown = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertTrue(first.executedActions() > 0, "The first charged mana-positive cast should execute successfully");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 16.0, "A successful charged cast should spend mana once");
+        helper.assertTrue(blockedByCooldown.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
+                "The immediate recast should be blocked by cooldown");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 16.0, "A cooldown-blocked charged cast should not spend mana");
+
+        helper.runAfterDelay(11, () -> {
+            SkillExecutionResult afterCooldown = Skills.executeOnCast(
+                    SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                    new RecordingHooks()
+            );
+
+            helper.assertTrue(afterCooldown.executedActions() > 0, "The post-cooldown charged cast should execute successfully");
+            helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 12.0, "Mana should only drop again when the later charged cast actually executes");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Verifies that zero-charge direct casts do not spend mana or start cooldown on charged skills.
+     */
+    @GameTest
+    public void executeOnCastDoesNotSpendManaOrStartCooldownWhenChargesAreEmpty(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_RESERVE_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+        PlayerSkillCharges.setAvailableCharges(player, CHARGED_RESERVE_SKILL_ID, 0, 2, helper.getLevel().getGameTime());
+
+        SkillExecutionResult blocked = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(blocked.executedActions(), 0, "Zero-charge direct casts should not execute runtime actions");
+        helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("charge")),
+                "Zero-charge direct casts should surface a charge warning");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0,
+                "Zero-charge direct casts should not spend mana");
+        helper.assertTrue(!PlayerSkillCooldowns.isOnCooldown(player, CHARGED_RESERVE_SKILL_ID, helper.getLevel().getGameTime()),
+                "Zero-charge direct casts should not start cooldown");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct player-sourced executeOnCast uses a fixed 10-tick burst window for times_to_cast=2 and reopens after expiry.
+     */
+    @GameTest
+    public void executeOnCastUsesBurstWindowForTimesToCastTwo(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BURST_STRIKE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        RecordingHooks firstHooks = new RecordingHooks();
+        RecordingHooks secondHooks = new RecordingHooks();
+        RecordingHooks thirdHooks = new RecordingHooks();
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                firstHooks
+        );
+        SkillExecutionResult second = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                secondHooks
+        );
+        SkillExecutionResult third = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                thirdHooks
+        );
+
+        helper.assertValueEqual(first.executedActions(), 1, "The burst opener should execute its single on-cast action");
+        helper.assertValueEqual(second.executedActions(), 1, "The allowed direct follow-up should execute once inside the active burst window");
+        helper.assertValueEqual(firstHooks.soundCount(), 1, "The burst opener should emit one sound action");
+        helper.assertValueEqual(secondHooks.soundCount(), 1, "The burst follow-up should emit one sound action");
+        helper.assertValueEqual(
+                PlayerSkillBursts.activeBurst(player, BURST_STRIKE_SKILL_ID, helper.getLevel().getGameTime())
+                        .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                        .orElse(-1),
+                0,
+                "Two successful direct casts inside one burst should exhaust the remaining follow-up count"
+        );
+        helper.assertValueEqual(third.executedActions(), 0, "A third direct cast inside the same burst window should be blocked");
+        helper.assertValueEqual(thirdHooks.soundCount(), 0, "A burst-blocked direct cast should not emit on-cast sound actions");
+        helper.assertTrue(third.warnings().stream().anyMatch(warning -> warning.contains("burst")),
+                "A burst-blocked direct cast should surface a burst warning");
+
+        helper.runAfterDelay(11, () -> {
+            RecordingHooks reopenedHooks = new RecordingHooks();
+            SkillExecutionResult reopened = Skills.executeOnCast(
+                    SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                    reopenedHooks
+            );
+
+            helper.assertValueEqual(reopened.executedActions(), 1,
+                    "After burst expiry, the next direct cast should open a fresh burst");
+            helper.assertValueEqual(reopenedHooks.soundCount(), 1, "The reopened burst opener should execute its on-cast sound once");
+            helper.assertValueEqual(
+                    PlayerSkillBursts.activeBurst(player, BURST_STRIKE_SKILL_ID, helper.getLevel().getGameTime())
+                            .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                            .orElse(-1),
+                    1,
+                    "A fresh direct burst opener should restore one remaining follow-up cast for times_to_cast=2"
+            );
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Verifies that a successful direct cast of a different skill resets the previous burst window immediately.
+     */
+    @GameTest
+    public void executeOnCastResetsBurstAfterDifferentSkillSucceeds(GameTestHelper helper) {
+        PreparedSkillUse burstPrepared = Skills.prepareUse(
+                skill(helper, BURST_STRIKE_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        PreparedSkillUse otherPrepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+
+        SkillExecutionResult firstBurst = Skills.executeOnCast(
+                SkillExecutionContext.forCast(burstPrepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult secondBurst = Skills.executeOnCast(
+                SkillExecutionContext.forCast(burstPrepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult otherSkill = Skills.executeOnCast(
+                SkillExecutionContext.forCast(otherPrepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult reopened = Skills.executeOnCast(
+                SkillExecutionContext.forCast(burstPrepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult followUp = Skills.executeOnCast(
+                SkillExecutionContext.forCast(burstPrepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(firstBurst.executedActions(), 1,
+                "The initial direct burst opener should execute before the reset check");
+        helper.assertValueEqual(secondBurst.executedActions(), 1,
+                "The second direct burst cast should exhaust the current burst before the reset check");
+        helper.assertTrue(otherSkill.executedActions() > 0,
+                "A different direct skill must execute successfully to reset the current burst window");
+        helper.assertValueEqual(reopened.executedActions(), 1,
+                "After another skill succeeds, the original direct burst should reopen as a fresh opener");
+        helper.assertValueEqual(followUp.executedActions(), 1,
+                "The reopened direct burst should still allow one follow-up cast");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that cooldown-blocked direct burst follow-ups keep the remaining burst cast available and do not spend mana, charges, or cooldown twice.
+     */
+    @GameTest
+    public void executeOnCastKeepsBurstStateWhenCooldownBlocksFollowUp(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BURST_RESERVE_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        long cooldownReadyTime = PlayerSkillCooldowns.readyGameTime(player, BURST_RESERVE_SKILL_ID, helper.getLevel().getGameTime())
+                .stream()
+                .findFirst()
+                .orElse(0L);
+        SkillExecutionResult blocked = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(first.executedActions(), 1, "The first direct burst-reserve cast should execute successfully");
+        helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
+                "An immediate direct burst follow-up should still be blocked by cooldown before the remaining burst cast is consumed");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 16.0,
+                "A cooldown-blocked direct burst follow-up should not spend mana again");
+        helper.assertValueEqual(PlayerSkillCharges.availableCharges(player, BURST_RESERVE_SKILL_ID, 2, helper.getLevel().getGameTime()), 1,
+                "A cooldown-blocked direct burst follow-up should not consume the remaining stored charge");
+        helper.assertValueEqual(
+                PlayerSkillBursts.activeBurst(player, BURST_RESERVE_SKILL_ID, helper.getLevel().getGameTime())
+                        .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                        .orElse(-1),
+                1,
+                "A cooldown-blocked direct burst follow-up should leave the remaining burst cast available"
+        );
+        helper.assertValueEqual(
+                PlayerSkillCooldowns.readyGameTime(player, BURST_RESERVE_SKILL_ID, helper.getLevel().getGameTime())
+                        .stream()
+                        .findFirst()
+                        .orElse(0L),
+                cooldownReadyTime,
+                "A cooldown-blocked direct burst follow-up should not restart cooldown"
+        );
+
+        helper.runAfterDelay(6, () -> {
+            SkillExecutionResult followUp = Skills.executeOnCast(
+                    SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                    new RecordingHooks()
+            );
+
+            helper.assertValueEqual(followUp.executedActions(), 1,
+                    "Once cooldown expires inside the burst window, the stored direct follow-up should still execute");
+            helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 12.0,
+                    "The delayed direct follow-up should spend mana only when it actually executes");
+            helper.assertValueEqual(PlayerSkillCharges.availableCharges(player, BURST_RESERVE_SKILL_ID, 2, helper.getLevel().getGameTime()), 0,
+                    "The delayed direct follow-up should consume the remaining stored charge when it executes");
+            helper.assertValueEqual(
+                    PlayerSkillBursts.activeBurst(player, BURST_RESERVE_SKILL_ID, helper.getLevel().getGameTime())
+                            .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                            .orElse(-1),
+                    0,
+                    "The delayed direct follow-up should exhaust the burst once it successfully executes"
+            );
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Verifies that mana-blocked direct burst follow-ups keep the remaining burst cast available.
+     */
+    @GameTest
+    public void executeOnCastKeepsBurstStateWhenManaBlocksFollowUp(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 6.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BURST_FOCUS_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+        );
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 6.0, 6.0);
+
+        SkillExecutionResult first = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+        SkillExecutionResult blocked = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(first.executedActions(), 1, "The opener mana-positive direct burst cast should execute successfully");
+        helper.assertValueEqual(blocked.executedActions(), 0, "A mana-blocked direct follow-up should not execute runtime actions");
+        helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("mana")),
+                "A mana-blocked direct follow-up should surface a mana warning");
+        helper.assertValueEqual(PlayerResources.getMana(player, 6.0), 2.0,
+                "A mana-blocked direct follow-up should not spend mana again");
+        helper.assertValueEqual(
+                PlayerSkillBursts.activeBurst(player, BURST_FOCUS_SKILL_ID, helper.getLevel().getGameTime())
+                        .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                        .orElse(-1),
+                1,
+                "A mana-blocked direct follow-up should keep the remaining burst cast available"
+        );
+
+        PlayerResources.setMana(player, 6.0, 6.0);
+        SkillExecutionResult recovered = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(recovered.executedActions(), 1,
+                "Restoring mana inside the burst window should allow the remaining direct follow-up cast");
+        helper.assertValueEqual(
+                PlayerSkillBursts.activeBurst(player, BURST_FOCUS_SKILL_ID, helper.getLevel().getGameTime())
+                        .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
+                        .orElse(-1),
+                0,
+                "The recovered direct follow-up should exhaust the burst when it succeeds"
+        );
         helper.succeed();
     }
 
@@ -955,6 +1894,11 @@ public final class SkillExecutionGameTests {
                 .orElseThrow(() -> helper.assertionException("Fireball should decode successfully"));
     }
 
+    private static SkillDefinition skill(GameTestHelper helper, Identifier id) {
+        return skillRegistry(helper).getOptional(id)
+                .orElseThrow(() -> helper.assertionException("Skill should decode successfully: " + id));
+    }
+
     private static Registry<SkillCalculationDefinition> skillCalculationRegistry(GameTestHelper helper) {
         return SkillCalculationRegistryAccess.skillCalculationRegistry(helper);
     }
@@ -988,6 +1932,12 @@ public final class SkillExecutionGameTests {
 
     private static SkillAction soundAction(String soundId) {
         return new SkillAction(SkillActionType.SOUND, Map.of("sound", soundId));
+    }
+
+    private static MobEffectInstance effect(GameTestHelper helper, Identifier effectId) {
+        MobEffect effect = BuiltInRegistries.MOB_EFFECT.getOptional(effectId)
+                .orElseThrow(() -> helper.assertionException("Mob effect should exist: " + effectId));
+        return new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), 80, 0);
     }
 
     private static final class RecordingHooks implements SkillExecutionHooks {

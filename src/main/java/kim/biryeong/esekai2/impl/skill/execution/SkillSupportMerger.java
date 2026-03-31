@@ -2,10 +2,14 @@ package kim.biryeong.esekai2.impl.skill.execution;
 
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
+import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.skill.definition.SkillAttached;
 import kim.biryeong.esekai2.api.skill.definition.SkillConfig;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
+import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldOverride;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldPathType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
@@ -27,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -159,6 +164,8 @@ public final class SkillSupportMerger {
         String particleId = action.particleId();
         String calculationId = action.calculationId();
         String effectId = action.effectId();
+        List<String> effectIds = action.effectIds();
+        Optional<SkillEffectPurgeMode> purge = action.purge();
         String dotId = action.dotId();
         String ailmentId = action.ailmentId();
         HitKind hitKind = action.hitKind();
@@ -178,6 +185,7 @@ public final class SkillSupportMerger {
         boolean showParticles = action.showParticles();
         boolean showIcon = action.showIcon();
         MobEffectRefreshPolicy refreshPolicy = action.refreshPolicy();
+        SkillAilmentRefreshPolicy ailmentRefreshPolicy = action.ailmentRefreshPolicy();
         String anchor = action.anchor();
         SkillValueExpression offsetX = action.offsetX();
         SkillValueExpression offsetY = action.offsetY();
@@ -185,72 +193,93 @@ public final class SkillSupportMerger {
 
         for (SkillActionFieldOverride fieldOverride : override.fieldOverrides()) {
             if (fieldOverride.path().type() == SkillActionFieldPathType.CALCULATION_ID) {
-                calculationId = fieldOverride.value();
+                calculationId = fieldOverride.value().first();
                 continue;
             }
 
             String key = fieldOverride.path().parameterKey();
+            String stringValue = fieldOverride.value().first();
             if (key.equals("component_id") || key.equals("entity_name")) {
-                componentId = fieldOverride.value();
+                componentId = stringValue;
             } else if (key.equals("entity_id") || key.equals("proj_en")) {
-                entityId = fieldOverride.value();
+                entityId = stringValue;
             } else if (key.equals("block_id") || key.equals("block")) {
-                blockId = fieldOverride.value();
+                blockId = stringValue;
             } else if (key.equals("sound") || key.equals("sound_id")) {
-                soundId = fieldOverride.value();
+                soundId = stringValue;
             } else if (key.equals("particle_id")) {
-                particleId = fieldOverride.value();
+                particleId = stringValue;
             } else if (key.equals("effect_id")) {
-                effectId = fieldOverride.value();
+                effectId = stringValue;
+                if (action.type() == SkillActionType.REMOVE_EFFECT) {
+                    effectIds = stringValue.isBlank() ? List.of() : List.of(stringValue);
+                }
+            } else if (key.equals("effect_ids")) {
+                effectIds = List.copyOf(fieldOverride.value().values());
+                if (action.type() == SkillActionType.REMOVE_EFFECT) {
+                    effectId = effectIds.isEmpty() ? "" : effectIds.getFirst();
+                }
+            } else if (key.equals("purge")) {
+                Optional<SkillEffectPurgeMode> parsedPurge = parsePurgeMode(stringValue);
+                if (parsedPurge.isPresent() || stringValue.isBlank()) {
+                    purge = parsedPurge;
+                }
             } else if (key.equals("dot_id")) {
-                dotId = fieldOverride.value();
+                dotId = stringValue;
             } else if (key.equals("ailment_id")) {
-                ailmentId = fieldOverride.value();
+                ailmentId = stringValue;
             } else if (key.equals("hit_kind")) {
-                hitKind = parseHitKind(fieldOverride.value());
+                hitKind = parseHitKind(stringValue);
             } else if (key.startsWith("base_damage_")) {
                 DamageType type = parseDamageType(key.substring("base_damage_".length()));
                 if (type != null) {
-                    baseDamage.put(type, SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0)));
+                    baseDamage.put(type, SkillValueExpression.constant(parseDouble(stringValue, 0.0)));
                 }
             } else if (key.equals("base_critical_strike_chance")) {
-                baseCriticalStrikeChance = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                baseCriticalStrikeChance = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("base_critical_strike_multiplier")) {
-                baseCriticalStrikeMultiplier = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 100.0));
+                baseCriticalStrikeMultiplier = SkillValueExpression.constant(parseDouble(stringValue, 100.0));
             } else if (key.equals("volume")) {
-                volume = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 1.0));
+                volume = SkillValueExpression.constant(parseDouble(stringValue, 1.0));
             } else if (key.equals("pitch")) {
-                pitch = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 1.0));
+                pitch = SkillValueExpression.constant(parseDouble(stringValue, 1.0));
             } else if (key.equals("life_ticks")) {
-                lifeTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                lifeTicks = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("duration_ticks")) {
-                durationTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                durationTicks = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("amplifier")) {
-                amplifier = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                amplifier = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("chance")) {
-                chance = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 100.0));
+                chance = SkillValueExpression.constant(parseDouble(stringValue, 100.0));
             } else if (key.equals("potency_multiplier")) {
-                potencyMultiplier = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 100.0));
+                potencyMultiplier = SkillValueExpression.constant(parseDouble(stringValue, 100.0));
             } else if (key.equals("tick_interval")) {
-                tickIntervalTicks = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 1.0));
+                tickIntervalTicks = SkillValueExpression.constant(parseDouble(stringValue, 1.0));
             } else if (key.equals("gravity")) {
-                gravity = Boolean.parseBoolean(fieldOverride.value());
+                gravity = Boolean.parseBoolean(stringValue);
             } else if (key.equals("ambient")) {
-                ambient = Boolean.parseBoolean(fieldOverride.value());
+                ambient = Boolean.parseBoolean(stringValue);
             } else if (key.equals("show_particles")) {
-                showParticles = Boolean.parseBoolean(fieldOverride.value());
+                showParticles = Boolean.parseBoolean(stringValue);
             } else if (key.equals("show_icon")) {
-                showIcon = Boolean.parseBoolean(fieldOverride.value());
+                showIcon = Boolean.parseBoolean(stringValue);
             } else if (key.equals("refresh_policy")) {
-                refreshPolicy = parseRefreshPolicy(fieldOverride.value());
+                if (action.type() == SkillActionType.APPLY_AILMENT) {
+                    SkillAilmentRefreshPolicy parsedAilmentRefreshPolicy = parseAilmentRefreshPolicy(stringValue, ailmentId);
+                    if (parsedAilmentRefreshPolicy != null) {
+                        ailmentRefreshPolicy = parsedAilmentRefreshPolicy;
+                    }
+                } else {
+                    refreshPolicy = parseRefreshPolicy(stringValue);
+                }
             } else if (key.equals("anchor")) {
-                anchor = fieldOverride.value();
+                anchor = stringValue;
             } else if (key.equals("offset_x")) {
-                offsetX = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                offsetX = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("offset_y")) {
-                offsetY = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                offsetY = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("offset_z")) {
-                offsetZ = SkillValueExpression.constant(parseDouble(fieldOverride.value(), 0.0));
+                offsetZ = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             }
         }
 
@@ -263,6 +292,8 @@ public final class SkillSupportMerger {
                 particleId,
                 calculationId,
                 effectId,
+                effectIds,
+                purge,
                 dotId,
                 ailmentId,
                 hitKind,
@@ -282,6 +313,7 @@ public final class SkillSupportMerger {
                 showParticles,
                 showIcon,
                 refreshPolicy,
+                ailmentRefreshPolicy,
                 anchor,
                 offsetX,
                 offsetY,
@@ -325,6 +357,30 @@ public final class SkillSupportMerger {
             }
         }
         return MobEffectRefreshPolicy.OVERWRITE;
+    }
+
+    private static SkillAilmentRefreshPolicy parseAilmentRefreshPolicy(String raw, String ailmentId) {
+        SkillAilmentRefreshPolicy parsed = SkillAilmentRefreshPolicy.fromSerializedName(raw);
+        if (parsed != null) {
+            return parsed;
+        }
+        if (raw != null && !raw.isBlank()) {
+            return null;
+        }
+
+        if (ailmentId == null || ailmentId.isBlank()) {
+            return SkillAilmentRefreshPolicy.STRONGER_ONLY;
+        }
+        for (AilmentType ailmentType : AilmentType.values()) {
+            if (ailmentType.serializedName().equals(ailmentId)) {
+                return SkillAilmentRefreshPolicy.defaultFor(ailmentType);
+            }
+        }
+        return SkillAilmentRefreshPolicy.STRONGER_ONLY;
+    }
+
+    private static Optional<SkillEffectPurgeMode> parsePurgeMode(String raw) {
+        return Optional.ofNullable(SkillEffectPurgeMode.fromSerializedName(raw));
     }
 
     private static DamageType parseDamageType(String rawType) {

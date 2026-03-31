@@ -1,0 +1,30 @@
+{
+  "identifier": "esekai2:burst_focus",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 4,
+    "cooldown_ticks": 0,
+    "times_to_cast": 2,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.beacon.activate"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

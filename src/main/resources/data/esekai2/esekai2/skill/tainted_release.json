@@ -1,0 +1,33 @@
+{
+  "identifier": "esekai2:tainted_release",
+  "config": {
+    "resource_cost": 4.0,
+    "cast_time_ticks": 8,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.amethyst_block.resonate"
+          },
+          {
+            "type": "remove_effect",
+            "purge": "negative"
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

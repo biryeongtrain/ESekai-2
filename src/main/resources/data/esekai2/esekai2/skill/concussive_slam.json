@@ -1,0 +1,43 @@
+{
+  "identifier": "esekai2:concussive_slam",
+  "config": {
+    "resource_cost": 5.0,
+    "cast_time_ticks": 10,
+    "cooldown_ticks": 0,
+    "tags": [
+      "attack",
+      "melee"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "target"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:entity.player.attack.knockback"
+          },
+          {
+            "type": "damage",
+            "base_damage": {
+              "physical": 11.0
+            }
+          },
+          {
+            "type": "apply_ailment",
+            "ailment_id": "stun",
+            "chance": 100.0,
+            "duration_ticks": 12,
+            "potency_multiplier": 100.0
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

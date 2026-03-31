@@ -1,0 +1,26 @@
+{
+  "identifier": "esekai2:support_overwriting_kindling",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "attack"
+        ]
+      },
+      "action_parameter_overrides": [
+        {
+          "action_type": "apply_ailment",
+          "field_overrides": [
+            {
+              "path": {
+                "type": "parameter",
+                "parameter_key": "refresh_policy"
+              },
+              "value": "overwrite"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

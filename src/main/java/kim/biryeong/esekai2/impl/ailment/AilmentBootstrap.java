@@ -25,6 +25,9 @@ public final class AilmentBootstrap {
     public static final MobEffect SHOCK = register(AilmentType.SHOCK, 0xFACC15);
     public static final MobEffect POISON = register(AilmentType.POISON, 0x16A34A);
     public static final MobEffect BLEED = register(AilmentType.BLEED, 0x991B1B);
+    public static final MobEffect CHILL = register(AilmentType.CHILL, 0x38BDF8);
+    public static final MobEffect FREEZE = register(AilmentType.FREEZE, 0x93C5FD);
+    public static final MobEffect STUN = register(AilmentType.STUN, 0xA78BFA);
 
     private static boolean bootstrapped;
 
@@ -53,6 +56,9 @@ public final class AilmentBootstrap {
             case SHOCK -> SHOCK;
             case POISON -> POISON;
             case BLEED -> BLEED;
+            case CHILL -> CHILL;
+            case FREEZE -> FREEZE;
+            case STUN -> STUN;
         };
     }
 
