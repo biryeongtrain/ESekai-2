@@ -38,6 +38,20 @@ public final class PlayerResourceService {
         return savedData(server).put(playerId, state, maxMana);
     }
 
+    public static PlayerResourceState addMana(ServerPlayer player, double amount, double maxMana) {
+        Objects.requireNonNull(player, "player");
+        return addMana(requireServer(player), player.getUUID(), amount, maxMana);
+    }
+
+    public static PlayerResourceState addMana(MinecraftServer server, UUID playerId, double amount, double maxMana) {
+        Objects.requireNonNull(server, "server");
+        Objects.requireNonNull(playerId, "playerId");
+        double sanitizedMax = sanitize(maxMana);
+        PlayerResourceState current = get(server, playerId, sanitizedMax);
+        double nextMana = current.currentMana() + (Double.isFinite(amount) ? amount : 0.0);
+        return savedData(server).put(playerId, new PlayerResourceState(nextMana), sanitizedMax);
+    }
+
     public static Optional<PlayerResourceState> spendMana(ServerPlayer player, double amount, double maxMana) {
         Objects.requireNonNull(player, "player");
         return spendMana(requireServer(player), player.getUUID(), amount, maxMana);

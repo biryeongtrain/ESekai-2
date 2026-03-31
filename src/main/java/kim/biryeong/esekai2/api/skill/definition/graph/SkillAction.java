@@ -36,6 +36,7 @@ import java.util.stream.Stream;
  * @param soundId sound id used by sound actions
  * @param particleId particle id used by sandstorm particle actions
  * @param calculationId datapack-backed damage calculation reference
+ * @param resource resource id used by resource_delta actions
  * @param effectId mob effect id used by MobEffect actions
  * @param effectIds mob effect id list used by multi-cleanse remove_effect actions
  * @param purge broad purge selector used by remove_effect actions
@@ -45,6 +46,7 @@ import java.util.stream.Stream;
  * @param baseDamage inline typed base damage overrides used by damage actions
  * @param baseCriticalStrikeChance inline critical strike chance override used by damage actions
  * @param baseCriticalStrikeMultiplier inline critical strike multiplier override used by damage actions
+ * @param amount scalar payload used by heal and resource_delta actions
  * @param volume sound volume payload
  * @param pitch sound pitch payload
  * @param lifeTicks projectile or summon lifetime payload
@@ -73,6 +75,7 @@ public record SkillAction(
         String soundId,
         String particleId,
         String calculationId,
+        String resource,
         String effectId,
         List<String> effectIds,
         Optional<SkillEffectPurgeMode> purge,
@@ -82,6 +85,7 @@ public record SkillAction(
         Map<DamageType, SkillValueExpression> baseDamage,
         SkillValueExpression baseCriticalStrikeChance,
         SkillValueExpression baseCriticalStrikeMultiplier,
+        SkillValueExpression amount,
         SkillValueExpression volume,
         SkillValueExpression pitch,
         SkillValueExpression lifeTicks,
@@ -127,6 +131,7 @@ public record SkillAction(
             Codec.STRING.optionalFieldOf("sound_id", "").forGetter(IdentityPayload::soundId),
             Codec.STRING.optionalFieldOf("particle_id", "").forGetter(IdentityPayload::particleId),
             Codec.STRING.optionalFieldOf("calculation_id", "").forGetter(IdentityPayload::calculationId),
+            Codec.STRING.optionalFieldOf("resource", "").forGetter(IdentityPayload::resource),
             Codec.STRING.optionalFieldOf("effect_id", "").forGetter(IdentityPayload::effectId),
             Codec.STRING.listOf().optionalFieldOf("effect_ids", List.of()).forGetter(IdentityPayload::effectIds),
             SkillEffectPurgeMode.CODEC.optionalFieldOf("purge").forGetter(IdentityPayload::purge),
@@ -141,7 +146,9 @@ public record SkillAction(
             SkillValueExpression.CODEC.optionalFieldOf("base_critical_strike_chance", SkillValueExpression.constant(0.0))
                     .forGetter(DamagePayload::baseCriticalStrikeChance),
             SkillValueExpression.CODEC.optionalFieldOf("base_critical_strike_multiplier", SkillValueExpression.constant(100.0))
-                    .forGetter(DamagePayload::baseCriticalStrikeMultiplier)
+                    .forGetter(DamagePayload::baseCriticalStrikeMultiplier),
+            SkillValueExpression.CODEC.optionalFieldOf("amount", SkillValueExpression.constant(0.0))
+                    .forGetter(DamagePayload::amount)
     ).apply(instance, DamagePayload::new));
 
     private static final MapCodec<RuntimePayload> RUNTIME_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -205,6 +212,7 @@ public record SkillAction(
                 soundId,
                 particleId,
                 calculationId,
+                resource,
                 effectId,
                 effectIds,
                 purge,
@@ -215,7 +223,7 @@ public record SkillAction(
     }
 
     private DamagePayload damagePayload() {
-        return new DamagePayload(hitKind, baseDamage, baseCriticalStrikeChance, baseCriticalStrikeMultiplier);
+        return new DamagePayload(hitKind, baseDamage, baseCriticalStrikeChance, baseCriticalStrikeMultiplier, amount);
     }
 
     private RuntimePayload runtimePayload() {
@@ -276,6 +284,11 @@ public record SkillAction(
             calculationId = readString(legacyParameters, "calculation_id");
         }
 
+        String resource = identity.resource();
+        if (resource.isBlank()) {
+            resource = readString(legacyParameters, "resource");
+        }
+
         String effectId = identity.effectId();
         if (effectId.isBlank()) {
             effectId = readString(legacyParameters, "effect_id");
@@ -322,6 +335,11 @@ public record SkillAction(
         SkillValueExpression baseCriticalStrikeMultiplier = damage.baseCriticalStrikeMultiplier();
         if (isDefaultExpression(baseCriticalStrikeMultiplier, 100.0)) {
             baseCriticalStrikeMultiplier = parseExpression(legacyParameters, "base_critical_strike_multiplier", 100.0);
+        }
+
+        SkillValueExpression amount = damage.amount();
+        if (isDefaultExpression(amount, 0.0)) {
+            amount = parseExpression(legacyParameters, "amount", 0.0);
         }
 
         SkillValueExpression volume = runtime.volume();
@@ -428,6 +446,7 @@ public record SkillAction(
                 soundId,
                 particleId,
                 calculationId,
+                resource,
                 effectId,
                 effectIds,
                 purge,
@@ -437,6 +456,7 @@ public record SkillAction(
                 baseDamage,
                 baseCriticalStrikeChance,
                 baseCriticalStrikeMultiplier,
+                amount,
                 volume,
                 pitch,
                 lifeTicks,
@@ -486,6 +506,7 @@ public record SkillAction(
                 .orElseGet(() -> readOptionalField(ops, input, "sound", Codec.STRING).orElse(""));
         String particleId = readOptionalField(ops, input, "particle_id", Codec.STRING).orElse("");
         String calculationId = readOptionalField(ops, input, "calculation_id", Codec.STRING).orElse("");
+        String resource = readOptionalField(ops, input, "resource", Codec.STRING).orElse("");
         String effectId = readOptionalField(ops, input, "effect_id", Codec.STRING).orElse("");
         List<String> effectIds = readOptionalField(ops, input, "effect_ids", Codec.STRING.listOf()).orElse(List.of());
         Optional<SkillEffectPurgeMode> purge = readOptionalField(ops, input, "purge", SkillEffectPurgeMode.CODEC);
@@ -497,6 +518,8 @@ public record SkillAction(
                 .orElse(SkillValueExpression.constant(0.0));
         SkillValueExpression baseCriticalStrikeMultiplier = readOptionalField(ops, input, "base_critical_strike_multiplier", SkillValueExpression.CODEC)
                 .orElse(SkillValueExpression.constant(100.0));
+        SkillValueExpression amount = readOptionalField(ops, input, "amount", SkillValueExpression.CODEC)
+                .orElse(SkillValueExpression.constant(0.0));
         SkillValueExpression volume = readOptionalField(ops, input, "volume", SkillValueExpression.CODEC)
                 .orElse(SkillValueExpression.constant(1.0));
         SkillValueExpression pitch = readOptionalField(ops, input, "pitch", SkillValueExpression.CODEC)
@@ -540,6 +563,7 @@ public record SkillAction(
                 soundId,
                 particleId,
                 calculationId,
+                resource,
                 effectId,
                 effectIds,
                 purge,
@@ -549,6 +573,7 @@ public record SkillAction(
                 baseDamage,
                 baseCriticalStrikeChance,
                 baseCriticalStrikeMultiplier,
+                amount,
                 volume,
                 pitch,
                 lifeTicks,
@@ -598,6 +623,7 @@ public record SkillAction(
         Objects.requireNonNull(soundId, "soundId");
         Objects.requireNonNull(particleId, "particleId");
         Objects.requireNonNull(calculationId, "calculationId");
+        Objects.requireNonNull(resource, "resource");
         Objects.requireNonNull(effectId, "effectId");
         Objects.requireNonNull(effectIds, "effectIds");
         Objects.requireNonNull(purge, "purge");
@@ -607,6 +633,7 @@ public record SkillAction(
         Objects.requireNonNull(baseDamage, "baseDamage");
         Objects.requireNonNull(baseCriticalStrikeChance, "baseCriticalStrikeChance");
         Objects.requireNonNull(baseCriticalStrikeMultiplier, "baseCriticalStrikeMultiplier");
+        Objects.requireNonNull(amount, "amount");
         Objects.requireNonNull(volume, "volume");
         Objects.requireNonNull(pitch, "pitch");
         Objects.requireNonNull(lifeTicks, "lifeTicks");
@@ -661,6 +688,7 @@ public record SkillAction(
                 readString(parameters, "sound_id", "sound"),
                 readString(parameters, "particle_id"),
                 calculationId == null || calculationId.isBlank() ? readString(parameters, "calculation_id") : calculationId,
+                readString(parameters, "resource"),
                 readString(parameters, "effect_id"),
                 parseEffectIds(parameters.get("effect_ids")),
                 parsePurgeMode(parameters.get("purge")),
@@ -670,6 +698,7 @@ public record SkillAction(
                 parseBaseDamage(parameters),
                 parseExpression(parameters, "base_critical_strike_chance", 0.0),
                 parseExpression(parameters, "base_critical_strike_multiplier", 100.0),
+                parseExpression(parameters, "amount", 0.0),
                 parseExpression(parameters, "volume", 1.0),
                 parseExpression(parameters, "pitch", 1.0),
                 parseExpression(parameters, "life_ticks", 0.0),
@@ -709,6 +738,7 @@ public record SkillAction(
                 "",
                 "",
                 "",
+                "",
                 List.of(),
                 Optional.empty(),
                 "",
@@ -717,6 +747,7 @@ public record SkillAction(
                 Map.of(),
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(0.0),
@@ -756,6 +787,7 @@ public record SkillAction(
                 "",
                 calculationId.toString(),
                 "",
+                "",
                 List.of(),
                 Optional.empty(),
                 "",
@@ -764,6 +796,7 @@ public record SkillAction(
                 Map.of(),
                 SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(0.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(1.0),
                 SkillValueExpression.constant(0.0),
@@ -820,6 +853,7 @@ public record SkillAction(
                 particleId,
                 calculationId,
                 "",
+                "",
                 List.of(),
                 Optional.empty(),
                 "",
@@ -828,6 +862,7 @@ public record SkillAction(
                 baseDamage,
                 baseCriticalStrikeChance,
                 baseCriticalStrikeMultiplier,
+                SkillValueExpression.constant(0.0),
                 volume,
                 pitch,
                 lifeTicks,
@@ -877,6 +912,9 @@ public record SkillAction(
         if (!particleId.isBlank()) {
             parameters.put("particle_id", particleId);
         }
+        if (!resource.isBlank()) {
+            parameters.put("resource", resource);
+        }
         if (!effectId.isBlank()) {
             parameters.put("effect_id", effectId);
         }
@@ -897,6 +935,7 @@ public record SkillAction(
         parameters.put("show_icon", Boolean.toString(showIcon));
         parameters.put("refresh_policy", serializedRefreshPolicy(type, refreshPolicy, ailmentRefreshPolicy));
         parameters.put("anchor", anchor);
+        parameters.put("amount", serializeExpression(amount));
         parameters.put("volume", serializeExpression(volume));
         parameters.put("pitch", serializeExpression(pitch));
         parameters.put("life_ticks", serializeExpression(lifeTicks));
@@ -937,6 +976,19 @@ public record SkillAction(
 
         if (action.type() == SkillActionType.SOUND && Identifier.tryParse(action.soundId()) == null) {
             return DataResult.error(() -> "sound action requires a valid sound_id");
+        }
+
+        if (action.type() == SkillActionType.HEAL && isDefaultExpression(action.amount(), 0.0)) {
+            return DataResult.error(() -> "heal action requires amount");
+        }
+
+        if (action.type() == SkillActionType.RESOURCE_DELTA) {
+            if (!"mana".equals(action.resource())) {
+                return DataResult.error(() -> "resource_delta action currently supports only resource: mana");
+            }
+            if (isDefaultExpression(action.amount(), 0.0)) {
+                return DataResult.error(() -> "resource_delta action requires amount");
+            }
         }
 
         if ((action.type() == SkillActionType.APPLY_EFFECT
@@ -1200,6 +1252,7 @@ public record SkillAction(
             String soundId,
             String particleId,
             String calculationId,
+            String resource,
             String effectId,
             List<String> effectIds,
             Optional<SkillEffectPurgeMode> purge,
@@ -1213,7 +1266,8 @@ public record SkillAction(
             HitKind hitKind,
             Map<DamageType, SkillValueExpression> baseDamage,
             SkillValueExpression baseCriticalStrikeChance,
-            SkillValueExpression baseCriticalStrikeMultiplier
+            SkillValueExpression baseCriticalStrikeMultiplier,
+            SkillValueExpression amount
     ) {
     }
 

@@ -26,12 +26,12 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 45개입니다.
+- 완료된 기반 작업은 현재 46개입니다.
 - 현재 활성 백로그는 2개입니다.
   - `Full data-driven skill system`
   - `Ailment system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 284개가 전부 통과했습니다.
+- 최신 안정 기준에서는 required Fabric GameTest 292개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -53,6 +53,7 @@
   - player-selected active skill state 와 equipped socket item cast resolver 가 추가되어 `main hand/off hand/armor` 기준 selected cast prepare/execute 경로가 서버 API 로 연결되어 있습니다.
   - support semantics 가 확장되어 `appended_rules`, socket index precedence, 최소 predicate/condition tie-in 이 selected cast path 위에서 동작합니다.
   - `apply_effect` 와 legacy `apply_buff`, `apply_dot`, `apply_ailment` action 이 typed graph, selected cast path, support override path 에 연결되어 있습니다.
+  - `heal` 과 `resource_delta` utility action 이 typed graph, selected cast path, support override path 에 연결되어 있고, `resource_delta` 는 현재 `mana` 회복/소모에 한해 server-side persistent resource state 를 갱신합니다.
   - `MobEffect` 기반 buff/debuff authoring 이 `refresh_policy` 와 함께 datapack/schema/runtime/support override 경로에 연결되어 있습니다.
   - `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `CHILL`, `FREEZE`, `STUN` 은 `MobEffect + attachment payload` 구조로 실제 runtime tick, damage amplification, movement control, cast-block 경로에 연결되어 있습니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
@@ -294,10 +295,15 @@
    - `PlayerSkillBurstState`, `PlayerSkillBursts` 와 대응 SavedData/service 가 추가되어 player UUID + skill id keyed burst remaining cast count 와 absolute expiry time 이 유지됩니다.
    - `burst_strike`, `burst_focus`, `burst_reserve` fixture 와 함께 selected cast/direct cast burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 284개 green baseline 이 검증되었습니다.
 
+46. Effect utility follow-up slice
+   - typed graph 에 `heal`, `resource_delta` action 이 추가되어 direct cast, selected cast, support override path 에서 datapack 기반 utility authoring 이 가능합니다.
+   - `resource_delta` 는 현재 `mana` 만 지원하며, `PlayerResources`/`PlayerResourceService` 에 signed mana delta API 가 추가되어 server-side persistent mana 회복/소모를 clamp 와 함께 처리합니다.
+   - sample `restorative_pulse`, `mana_surge`, `support_empowering_pulse`, `support_abundant_surge` fixture 와 함께 prepare decode, invalid resource warning, direct runtime heal/mana restore, selected cast support override, `build/junit.xml` 기반 validation closure 까지 포함해 required Fabric GameTest 292개 green baseline 이 검증되었습니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 284개 전부 통과입니다.
+- 최신 안정 기준에서는 required Fabric GameTest 292개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -466,12 +472,13 @@
      - `support semantics expansion`
      - `AoE-style calculation/predicate expansion`
      - `MobEffect-based buff/debuff effect integration`
-- 다음 작업 범위:
-     - expanded effect semantics 를 더 넓은 utility/effect authoring 축으로 계속 정리
-     - support/selected cast path 와 effect semantics 를 계속 일관되게 유지
-     - 확장된 effect semantics 를 GameTest 로 계속 검증
+     - `effect utility follow-up slice`
+   - 다음 작업 범위:
+     - resource follow-up slice 를 server-side runtime 기준으로 정리
+     - mana regeneration 과 persistent resource state update path 를 설계/집행
+     - 이후 화면 기획과 분리된 상태에서 resource semantics 를 GameTest 로 계속 검증
    - 후속 구현 순서:
-      - `effect utility follow-up slice`
+      - `resource follow-up slice`
    - 완료 기준:
      - calculation reference 와 predicate 축이 현재 damage/on-cast 중심 경계를 넘어 더 넓은 graph/runtime 경로에 연결됨
      - datapack author 가 더 많은 runtime gating/calculation 재사용을 코드 수정 없이 할 수 있음
@@ -499,12 +506,14 @@
 ## Next Focus
 
 - 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
-- 방금 완료된 승인 단위는 `times_to_cast burst runtime` 입니다.
-- 이번 완료 단위로 `PlayerSkillBurstState`, `PlayerSkillBursts`, player burst SavedData/service, selected cast/direct player runtime burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `burst_strike`, `burst_focus`, `burst_reserve` fixture, required Fabric GameTest 284 green baseline 이 추가되었습니다.
-- 직전 승인 단위는 `Skill charges runtime` 입니다.
-- 직전 완료 단위로 `PlayerSkillChargeState`, `PlayerSkillCharges`, player charge SavedData/service, selected cast/direct player runtime charge spend/block/recharge, cooldown + charge coexistence, charge-block side-effect order regression coverage, `charged_surge`, `charged_focus`, `charged_reserve` fixture, required Fabric GameTest 276 green baseline 이 추가되었습니다.
-- 직전 승인 단위는 `Skill runtime enforcement for mana, cooldown, and disabled dimensions` 입니다.
-- 직전 완료 단위로 `PlayerResourceState`, `PlayerResources`, `PlayerSkillCooldownState`, `PlayerSkillCooldowns`, selected cast/direct player runtime mana spend, cooldown start/block, disabled dimension gate, `overworld_barrier` fixture, required Fabric GameTest 265 green baseline 이 추가되었습니다.
+- 방금 완료된 승인 단위는 `effect utility follow-up slice` 입니다.
+- 이번 완료 단위로 `heal`, `resource_delta`, `PreparedHealAction`, `PreparedResourceDeltaAction`, mana delta API, `restorative_pulse`, `mana_surge`, `support_empowering_pulse`, `support_abundant_surge`, direct/selected/support parity coverage, required Fabric GameTest 292 green baseline 이 추가되었습니다.
+- 직전 승인 단위는 `times_to_cast burst runtime` 입니다.
+- 직전 완료 단위로 `PlayerSkillBurstState`, `PlayerSkillBursts`, player burst SavedData/service, selected cast/direct player runtime burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `burst_strike`, `burst_focus`, `burst_reserve` fixture, required Fabric GameTest 284 green baseline 이 추가되었습니다.
+- 그 이전 승인 단위는 `Skill charges runtime` 입니다.
+- 그 이전 완료 단위로 `PlayerSkillChargeState`, `PlayerSkillCharges`, player charge SavedData/service, selected cast/direct player runtime charge spend/block/recharge, cooldown + charge coexistence, charge-block side-effect order regression coverage, `charged_surge`, `charged_focus`, `charged_reserve` fixture, required Fabric GameTest 276 green baseline 이 추가되었습니다.
+- 그 이전 승인 단위는 `Skill runtime enforcement for mana, cooldown, and disabled dimensions` 입니다.
+- 그 이전 완료 단위로 `PlayerResourceState`, `PlayerResources`, `PlayerSkillCooldownState`, `PlayerSkillCooldowns`, selected cast/direct player runtime mana spend, cooldown start/block, disabled dimension gate, `overworld_barrier` fixture, required Fabric GameTest 265 green baseline 이 추가되었습니다.
 - 직전 승인 단위는 `Data-driven ailment refresh policy and control interaction polish` 입니다.
 - 직전 완료 단위로 `SkillAilmentRefreshPolicy`, `apply_ailment.refresh_policy`, policy-driven ailment replacement semantics, selected cast/support refresh override parity, overwrite chill replacement, freeze removal 후 chill slow 복귀, required Fabric GameTest 257 green baseline 이 추가되었습니다.
 - 직전 승인 단위는 `Non-DoT ailment control foundation` 입니다.
@@ -520,8 +529,8 @@
 - 직전 단위로 `MobEffect-based ailment foundation` 이 들어가 있으며 `apply_ailment`, `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `MobEffect + attachment payload`, `damage_taken_more` 연동이 검증되었습니다.
 - `AoE-style calculation/predicate expansion` 은 직전 단위에서 완료되었고, `calculation_id`, `skill_value`, route/selector/action predicate 는 AoE 지향 typed expression layer 로 이미 연결되어 있습니다.
 - `Ailment system` 은 foundation 범위가 확장되었고, 남은 범위는 `CHILL / FREEZE / STUN` 후속 공식 정리와 상호작용 polish 입니다.
-- 현재 다음 승인 단위는 `Full data-driven skill system` 의 후속 resource/runtime authoring 확장입니다.
-- 다음 기능 후보는 mana regeneration/resource UI sync 같은 resource follow-up slice, `Ailment system` 후속 공식 정리, release stabilization, 또는 `Full data-driven skill system` effect utility follow-up slice 입니다.
+- 현재 다음 승인 단위는 `Full data-driven skill system` 의 후속 resource follow-up slice 입니다.
+- 다음 기능 후보는 mana regeneration 같은 resource follow-up slice, `Ailment system` 후속 공식 정리, release stabilization, 또는 generic multi-resource 설계 전 단계의 resource semantics polish 입니다.
 - support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
 - selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
 - 선행 기반은 준비되어 있습니다.

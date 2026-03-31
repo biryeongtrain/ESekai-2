@@ -9,6 +9,8 @@ import com.mojang.serialization.DataResult;
 public enum SkillActionType {
     SOUND("sound"),
     DAMAGE("damage"),
+    HEAL("heal"),
+    RESOURCE_DELTA("resource_delta"),
     APPLY_EFFECT("apply_effect"),
     APPLY_BUFF("apply_buff"),
     REMOVE_EFFECT("remove_effect"),

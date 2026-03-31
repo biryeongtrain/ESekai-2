@@ -9,6 +9,7 @@ import kim.biryeong.esekai2.api.item.socket.SocketedSkillItemState;
 import kim.biryeong.esekai2.api.item.socket.SocketedSkillRef;
 import kim.biryeong.esekai2.api.item.socket.SocketedSkills;
 import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
+import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.player.skill.PlayerActiveSkills;
 import kim.biryeong.esekai2.api.player.skill.SelectedActiveSkillRef;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
@@ -26,7 +27,9 @@ import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
 import kim.biryeong.esekai2.api.skill.execution.SelectedSkillCastResult;
@@ -36,6 +39,7 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
+import kim.biryeong.esekai2.api.stat.combat.CombatStats;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.api.stat.modifier.ConditionalStatModifier;
@@ -76,12 +80,16 @@ public final class SkillExternalEffectGameTests {
     private static final Identifier PURGING_HEX_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "purging_hex");
     private static final Identifier VENOM_STRIKE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "venom_strike");
     private static final Identifier SEARING_BRAND_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "searing_brand");
+    private static final Identifier RESTORATIVE_PULSE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "restorative_pulse");
+    private static final Identifier MANA_SURGE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "mana_surge");
     private static final Identifier SUPPORT_COMPOUND_CLEANSE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_compound_cleanse");
     private static final Identifier SUPPORT_MALEVOLENT_WAVE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_malevolent_wave");
     private static final Identifier SUPPORT_LASTING_HEX_ID = Identifier.fromNamespaceAndPath("esekai2", "support_lasting_hex");
     private static final Identifier SUPPORT_QUICK_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_quick_focus");
     private static final Identifier SUPPORT_TOXIC_CLEANSE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_toxic_cleanse");
     private static final Identifier SUPPORT_LINGERING_BRAND_ID = Identifier.fromNamespaceAndPath("esekai2", "support_lingering_brand");
+    private static final Identifier SUPPORT_EMPOWERING_PULSE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_empowering_pulse");
+    private static final Identifier SUPPORT_ABUNDANT_SURGE_ID = Identifier.fromNamespaceAndPath("esekai2", "support_abundant_surge");
     private static final Identifier BATTLE_FOCUS_EFFECT_ID = Identifier.fromNamespaceAndPath("minecraft", "speed");
     private static final Identifier CRIPPLING_HEX_EFFECT_ID = Identifier.fromNamespaceAndPath("minecraft", "slowness");
     private static final Identifier POISON_EFFECT_ID = AilmentType.POISON.effectId();
@@ -101,12 +109,16 @@ public final class SkillExternalEffectGameTests {
         helper.assertTrue(skillRegistry(helper).containsKey(CATHARTIC_WAVE_SKILL_ID), "Cathartic wave should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(PURGING_HEX_SKILL_ID), "Purging hex should load into the skill registry");
         helper.assertTrue(skillRegistry(helper).containsKey(SEARING_BRAND_SKILL_ID), "Searing brand should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(RESTORATIVE_PULSE_SKILL_ID), "Restorative pulse should load into the skill registry");
+        helper.assertTrue(skillRegistry(helper).containsKey(MANA_SURGE_SKILL_ID), "Mana surge should load into the skill registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_COMPOUND_CLEANSE_ID), "Compound cleanse support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_MALEVOLENT_WAVE_ID), "Malevolent wave support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_LASTING_HEX_ID), "Lasting hex support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_QUICK_FOCUS_ID), "Quick focus support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_TOXIC_CLEANSE_ID), "Toxic cleanse support should load into the support registry");
         helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_LINGERING_BRAND_ID), "Lingering brand support should load into the support registry");
+        helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_EMPOWERING_PULSE_ID), "Empowering pulse should load into the support registry");
+        helper.assertTrue(supportRegistry(helper).containsKey(SUPPORT_ABUNDANT_SURGE_ID), "Abundant surge should load into the support registry");
         helper.succeed();
     }
 
@@ -150,6 +162,75 @@ public final class SkillExternalEffectGameTests {
         helper.assertValueEqual(dotAction.dotId(), "searing_brand", "Prepared dot action should preserve the stable dot id");
         helper.assertValueEqual(dotAction.durationTicks(), 8, "Prepared dot action should resolve duration_ticks");
         helper.assertValueEqual(dotAction.tickIntervalTicks(), 2, "Prepared dot action should resolve tick_interval");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that heal and resource_delta actions decode into concrete prepared action payloads.
+     */
+    @GameTest
+    public void prepareUseBuildsHealAndResourceActionsFromConfig(GameTestHelper helper) {
+        PreparedSkillUse healPrepared = Skills.prepareUse(
+                restorativePulse(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+        PreparedSkillUse resourcePrepared = Skills.prepareUse(
+                manaSurge(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        PreparedHealAction healAction = (PreparedHealAction) healPrepared.onCastActions().stream()
+                .filter(PreparedHealAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Restorative pulse should prepare one heal action"));
+        PreparedResourceDeltaAction resourceAction = (PreparedResourceDeltaAction) resourcePrepared.onCastActions().stream()
+                .filter(PreparedResourceDeltaAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Mana surge should prepare one resource_delta action"));
+
+        helper.assertValueEqual(healAction.actionType(), "heal", "Prepared heal action should preserve its action type");
+        helper.assertValueEqual(healAction.amount(), 4.0, "Prepared heal action should resolve amount");
+        helper.assertValueEqual(resourceAction.actionType(), "resource_delta", "Prepared resource_delta action should preserve its action type");
+        helper.assertValueEqual(resourceAction.resource(), PreparedResourceDeltaAction.MANA_RESOURCE, "Prepared resource_delta action should preserve resource");
+        helper.assertValueEqual(resourceAction.amount(), 4.0, "Prepared resource_delta action should resolve amount");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that invalid resource_delta payloads surface warnings instead of preparing broken runtime actions.
+     */
+    @GameTest
+    public void prepareUseWarnsOnInvalidResourceDelta(GameTestHelper helper) {
+        SkillDefinition invalidResourceSkill = new SkillDefinition(
+                "esekai2:invalid_resource_delta",
+                SkillConfig.DEFAULT,
+                new SkillAttached(
+                        List.of(new SkillRule(
+                                Set.of(SkillTargetSelector.self()),
+                                List.of(new SkillAction(SkillActionType.RESOURCE_DELTA, Map.of(
+                                        "resource", "life",
+                                        "amount", "4.0"
+                                ))),
+                                List.of(),
+                                List.of()
+                        )),
+                        Map.of()
+                ),
+                "",
+                Set.of(),
+                ""
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                invalidResourceSkill,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        helper.assertTrue(prepared.onCastActions().isEmpty(), "Invalid resource_delta payloads should not produce prepared actions");
+        helper.assertTrue(
+                prepared.warnings().stream().anyMatch(warning -> warning.contains("resource_delta")),
+                "Invalid resource_delta payloads should surface a preparation warning"
+        );
         helper.succeed();
     }
 
@@ -254,6 +335,50 @@ public final class SkillExternalEffectGameTests {
         helper.assertValueEqual(result.executedActions(), 2, "Battle focus should execute both sound and buff actions");
         helper.assertValueEqual(effectInstance.getAmplifier(), 1, "Battle focus should apply the configured amplifier");
         helper.assertTrue(effectInstance.getDuration() > 0, "Battle focus should apply a positive duration");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that heal actions restore health but do not exceed the target's maximum health.
+     */
+    @GameTest
+    public void executeOnCastHealsCasterWithoutOverheal(GameTestHelper helper) {
+        Player caster = helper.makeMockPlayer(GameType.SURVIVAL);
+        caster.setHealth(caster.getMaxHealth() - 2.0F);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                restorativePulse(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Restorative pulse should execute both sound and heal actions");
+        helper.assertValueEqual(caster.getHealth(), caster.getMaxHealth(), "Heal actions should clamp at maximum health");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that resource_delta actions restore mana on direct player-sourced casts.
+     */
+    @GameTest
+    public void executeOnCastAppliesManaDeltaToPlayer(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PlayerResources.setMana(player, 3.0, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                manaSurge(helper),
+                skillUseContext(helper, attacker, newHolder(helper), 0.0, 0.99)
+        );
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty())
+        );
+
+        helper.assertValueEqual(result.executedActions(), 2, "Mana surge should execute both sound and resource_delta actions");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 7.0, "resource_delta should restore the configured mana amount");
         helper.succeed();
     }
 
@@ -1212,6 +1337,112 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
+     * Verifies that linked support overrides can change heal amounts on the selected cast path.
+     */
+    @GameTest
+    public void prepareSelectedUseAppliesHealSupportOverrides(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.GHAST_TEAR, RESTORATIVE_PULSE_SKILL_ID, List.of(supportRef(1, SUPPORT_EMPOWERING_PULSE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, RESTORATIVE_PULSE_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        PreparedHealAction healAction = (PreparedHealAction) result.preparedUse().orElseThrow().onCastActions().stream()
+                .filter(PreparedHealAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected restorative pulse should still expose one heal action"));
+
+        helper.assertTrue(result.success(), "Selected restorative pulse should prepare successfully");
+        helper.assertValueEqual(healAction.amount(), 8.0, "Linked support should override heal amount");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that linked support overrides can change resource_delta amounts on the selected cast path.
+     */
+    @GameTest
+    public void prepareSelectedUseAppliesResourceDeltaSupportOverrides(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.LAPIS_LAZULI, MANA_SURGE_SKILL_ID, List.of(supportRef(1, SUPPORT_ABUNDANT_SURGE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, MANA_SURGE_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
+        );
+
+        PreparedResourceDeltaAction resourceAction = (PreparedResourceDeltaAction) result.preparedUse().orElseThrow().onCastActions().stream()
+                .filter(PreparedResourceDeltaAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected mana surge should still expose one resource_delta action"));
+
+        helper.assertTrue(result.success(), "Selected mana surge should prepare successfully");
+        helper.assertValueEqual(resourceAction.amount(), 10.0, "Linked support should override resource_delta amount");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected casts execute heal support overrides at runtime.
+     */
+    @GameTest
+    public void castSelectedSkillAppliesHealSupportOverrideAtRuntime(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.setHealth(player.getMaxHealth() - 10.0F);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.GHAST_TEAR, RESTORATIVE_PULSE_SKILL_ID, List.of(supportRef(1, SUPPORT_EMPOWERING_PULSE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, RESTORATIVE_PULSE_SKILL_ID));
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected restorative pulse cast should succeed");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected restorative pulse should execute both sound and heal actions");
+        helper.assertValueEqual(player.getHealth(), player.getMaxHealth() - 2.0F, "Selected heal support override should increase the restored health");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected casts execute resource_delta support overrides at runtime.
+     */
+    @GameTest
+    public void castSelectedSkillAppliesResourceDeltaSupportOverrideAtRuntime(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PlayerResources.setMana(player, 5.0, 20.0);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                socketedSkillStack(Items.LAPIS_LAZULI, MANA_SURGE_SKILL_ID, List.of(supportRef(1, SUPPORT_ABUNDANT_SURGE_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, MANA_SURGE_SKILL_ID));
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, attacker, newHolder(helper), 0.0, 0.99),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected mana surge cast should succeed");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected mana surge should execute both sound and resource_delta actions");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 15.0, "Selected resource_delta support override should increase restored mana");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that generic apply_dot waits for its first interval, deals periodic damage, and does not tick again after expiry.
      */
     @GameTest
@@ -1369,6 +1600,16 @@ public final class SkillExternalEffectGameTests {
     private static SkillDefinition searingBrand(GameTestHelper helper) {
         return skillRegistry(helper).getOptional(SEARING_BRAND_SKILL_ID)
                 .orElseThrow(() -> helper.assertionException("Searing brand should decode successfully"));
+    }
+
+    private static SkillDefinition restorativePulse(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(RESTORATIVE_PULSE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Restorative pulse should decode successfully"));
+    }
+
+    private static SkillDefinition manaSurge(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(MANA_SURGE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Mana surge should decode successfully"));
     }
 
     private static SkillDefinition cripplingHex(GameTestHelper helper) {

@@ -1,0 +1,34 @@
+{
+  "identifier": "esekai2:mana_surge",
+  "config": {
+    "resource_cost": 0.0,
+    "cast_time_ticks": 8,
+    "cooldown_ticks": 0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "sound",
+            "sound_id": "minecraft:block.respawn_anchor.charge"
+          },
+          {
+            "type": "resource_delta",
+            "resource": "mana",
+            "amount": 4.0
+          }
+        ]
+      }
+    ],
+    "entity_components": {}
+  }
+}

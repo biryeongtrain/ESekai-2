@@ -19,8 +19,10 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillExecutionRoute;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
@@ -223,6 +225,8 @@ public final class SkillHitPreparationCalculator {
         return switch (type) {
             case SOUND -> parseSound(action, context, warnings);
             case DAMAGE -> parseDamage(action, context, warnings);
+            case HEAL -> parseHeal(action, context, warnings);
+            case RESOURCE_DELTA -> parseResourceDelta(action, context, warnings);
             case APPLY_EFFECT, APPLY_BUFF -> parseApplyBuff(action, context, warnings);
             case REMOVE_EFFECT -> parseRemoveEffect(action, warnings);
             case APPLY_AILMENT -> parseApplyAilment(action, context, warnings);
@@ -293,6 +297,38 @@ public final class SkillHitPreparationCalculator {
                 ),
                 context.defenderStats()
                 ), calculationId, action.enPreds());
+    }
+
+    private static PreparedHealAction parseHeal(
+            SkillAction action,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        double amount = resolveValue(action.amount(), context, 0.0);
+        if (!Double.isFinite(amount) || amount <= 0.0) {
+            warnings.add("heal action requires amount > 0");
+            return null;
+        }
+        return new PreparedHealAction(amount, action.enPreds());
+    }
+
+    private static PreparedResourceDeltaAction parseResourceDelta(
+            SkillAction action,
+            SkillUseContext context,
+            List<String> warnings
+    ) {
+        String resource = readString(action.resource());
+        if (resource == null || !PreparedResourceDeltaAction.MANA_RESOURCE.equals(resource)) {
+            warnings.add("resource_delta action currently supports only resource: mana");
+            return null;
+        }
+
+        double amount = resolveValue(action.amount(), context, 0.0);
+        if (!Double.isFinite(amount) || amount == 0.0) {
+            warnings.add("resource_delta action requires amount != 0");
+            return null;
+        }
+        return new PreparedResourceDeltaAction(resource, amount, action.enPreds());
     }
 
     private static PreparedApplyBuffAction parseApplyBuff(

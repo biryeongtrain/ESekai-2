@@ -156,6 +156,10 @@ public final class SkillExecutionExecutor {
                 completed = hooks.playSound(context, targets, preparedSoundAction);
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction preparedDamageAction) {
                 completed = applyDamage(context, targets, hooks, preparedDamageAction, latestDamageResults);
+            } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedHealAction preparedHealAction) {
+                completed = hooks.heal(context, targets, preparedHealAction);
+            } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction preparedResourceDeltaAction) {
+                completed = hooks.applyResourceDelta(context, targets, preparedResourceDeltaAction);
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction preparedApplyBuffAction) {
                 completed = hooks.applyBuff(context, targets, preparedApplyBuffAction);
             } else if (action instanceof kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction preparedRemoveEffectAction) {

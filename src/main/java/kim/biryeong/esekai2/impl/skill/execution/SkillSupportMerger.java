@@ -163,6 +163,7 @@ public final class SkillSupportMerger {
         String soundId = action.soundId();
         String particleId = action.particleId();
         String calculationId = action.calculationId();
+        String resource = action.resource();
         String effectId = action.effectId();
         List<String> effectIds = action.effectIds();
         Optional<SkillEffectPurgeMode> purge = action.purge();
@@ -172,6 +173,7 @@ public final class SkillSupportMerger {
         Map<DamageType, SkillValueExpression> baseDamage = new LinkedHashMap<>(action.baseDamage());
         SkillValueExpression baseCriticalStrikeChance = action.baseCriticalStrikeChance();
         SkillValueExpression baseCriticalStrikeMultiplier = action.baseCriticalStrikeMultiplier();
+        SkillValueExpression amount = action.amount();
         SkillValueExpression volume = action.volume();
         SkillValueExpression pitch = action.pitch();
         SkillValueExpression lifeTicks = action.lifeTicks();
@@ -209,6 +211,8 @@ public final class SkillSupportMerger {
                 soundId = stringValue;
             } else if (key.equals("particle_id")) {
                 particleId = stringValue;
+            } else if (key.equals("resource")) {
+                resource = stringValue;
             } else if (key.equals("effect_id")) {
                 effectId = stringValue;
                 if (action.type() == SkillActionType.REMOVE_EFFECT) {
@@ -239,6 +243,8 @@ public final class SkillSupportMerger {
                 baseCriticalStrikeChance = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("base_critical_strike_multiplier")) {
                 baseCriticalStrikeMultiplier = SkillValueExpression.constant(parseDouble(stringValue, 100.0));
+            } else if (key.equals("amount")) {
+                amount = SkillValueExpression.constant(parseDouble(stringValue, 0.0));
             } else if (key.equals("volume")) {
                 volume = SkillValueExpression.constant(parseDouble(stringValue, 1.0));
             } else if (key.equals("pitch")) {
@@ -291,6 +297,7 @@ public final class SkillSupportMerger {
                 soundId,
                 particleId,
                 calculationId,
+                resource,
                 effectId,
                 effectIds,
                 purge,
@@ -300,6 +307,7 @@ public final class SkillSupportMerger {
                 Map.copyOf(baseDamage),
                 baseCriticalStrikeChance,
                 baseCriticalStrikeMultiplier,
+                amount,
                 volume,
                 pitch,
                 lifeTicks,

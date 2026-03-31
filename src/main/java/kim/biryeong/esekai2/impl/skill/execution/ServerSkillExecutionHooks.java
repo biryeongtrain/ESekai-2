@@ -8,12 +8,15 @@ import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
 import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
+import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
@@ -106,6 +109,64 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         }
 
         return Optional.ofNullable(lastResult);
+    }
+
+    @Override
+    public boolean heal(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedHealAction action
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+
+        boolean healed = false;
+        for (Entity target : targets) {
+            if (!(target instanceof LivingEntity livingTarget) || !livingTarget.isAlive()) {
+                continue;
+            }
+
+            float previousHealth = livingTarget.getHealth();
+            livingTarget.heal((float) action.amount());
+            healed |= livingTarget.getHealth() > previousHealth;
+        }
+        return healed;
+    }
+
+    @Override
+    public boolean applyResourceDelta(
+            SkillExecutionContext context,
+            List<Entity> targets,
+            PreparedResourceDeltaAction action
+    ) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(targets, "targets");
+        Objects.requireNonNull(action, "action");
+
+        if (!PreparedResourceDeltaAction.MANA_RESOURCE.equals(action.resource())) {
+            return false;
+        }
+
+        double maxMana = context.preparedUse().useContext().attackerStats().resolvedValue(kim.biryeong.esekai2.api.stat.combat.CombatStats.MANA);
+        if (!Double.isFinite(maxMana) || maxMana <= 0.0) {
+            return false;
+        }
+
+        boolean applied = false;
+        for (Entity target : targets) {
+            if (!(target instanceof net.minecraft.server.level.ServerPlayer player)) {
+                continue;
+            }
+            if (target != context.source()) {
+                continue;
+            }
+
+            double previousMana = PlayerResources.getMana(player, maxMana);
+            double nextMana = PlayerResources.addMana(player, action.amount(), maxMana).currentMana();
+            applied |= Double.compare(previousMana, nextMana) != 0;
+        }
+        return applied;
     }
 
     @Override

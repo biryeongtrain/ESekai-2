@@ -5,8 +5,10 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedRemoveEffectAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
@@ -26,6 +28,14 @@ public interface SkillExecutionHooks {
     boolean playSound(SkillExecutionContext context, List<Entity> targets, PreparedSoundAction action);
 
     Optional<DamageCalculationResult> applyDamage(SkillExecutionContext context, List<Entity> targets, PreparedDamageAction action);
+
+    default boolean heal(SkillExecutionContext context, List<Entity> targets, PreparedHealAction action) {
+        return false;
+    }
+
+    default boolean applyResourceDelta(SkillExecutionContext context, List<Entity> targets, PreparedResourceDeltaAction action) {
+        return false;
+    }
 
     default boolean applyEffect(SkillExecutionContext context, List<Entity> targets, PreparedApplyBuffAction action) {
         return false;
@@ -72,6 +82,8 @@ public interface SkillExecutionHooks {
         return switch (action.actionType()) {
             case "sound" -> playSound(context, targets, (PreparedSoundAction) action);
             case "damage" -> applyDamage(context, targets, (PreparedDamageAction) action).isPresent();
+            case "heal" -> heal(context, targets, (PreparedHealAction) action);
+            case "resource_delta" -> applyResourceDelta(context, targets, (PreparedResourceDeltaAction) action);
             case "apply_effect", "apply_buff" -> applyBuff(context, targets, (PreparedApplyBuffAction) action);
             case "remove_effect" -> removeEffect(context, targets, (PreparedRemoveEffectAction) action);
             case "apply_dot" -> applyDamageOverTime(context, targets, (PreparedApplyDotAction) action);

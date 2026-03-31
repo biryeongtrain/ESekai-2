@@ -45,6 +45,18 @@ public final class PlayerResources {
     }
 
     /**
+     * Applies a signed mana delta to the player and clamps the resulting state to {@code [0, maxMana]}.
+     *
+     * @param player player to update
+     * @param amount signed mana delta, where positive restores and negative spends
+     * @param maxMana current maximum mana used to initialize or clamp stored state
+     * @return updated persistent mana state
+     */
+    public static PlayerResourceState addMana(ServerPlayer player, double amount, double maxMana) {
+        return PlayerResourceService.addMana(player, amount, maxMana);
+    }
+
+    /**
      * Attempts to spend mana from the player.
      *
      * @param player player to update
