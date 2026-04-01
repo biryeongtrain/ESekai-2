@@ -1,0 +1,18 @@
+{
+  "identifier": "esekai2:support_guard_focus",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "config_overrides": [
+        {
+          "resource": "guard",
+          "resource_cost": 3.0
+        }
+      ]
+    }
+  ]
+}

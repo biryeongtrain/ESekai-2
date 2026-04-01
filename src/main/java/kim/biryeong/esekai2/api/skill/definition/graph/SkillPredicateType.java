@@ -10,7 +10,11 @@ public enum SkillPredicateType {
     ALWAYS("always"),
     RANDOM_CHANCE("random_chance"),
     HAS_TARGET("has_target"),
-    HAS_EFFECT("has_effect");
+    HAS_EFFECT("has_effect"),
+    HAS_RESOURCE("has_resource"),
+    COOLDOWN_READY("cooldown_ready"),
+    HAS_CHARGES("has_charges"),
+    HAS_BURST_FOLLOWUP("has_burst_followup");
 
     public static final Codec<SkillPredicateType> CODEC = Codec.STRING.comapFlatMap(
             SkillPredicateType::bySerializedName,

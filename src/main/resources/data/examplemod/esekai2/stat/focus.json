@@ -1,0 +1,5 @@
+{
+  "translation_key": "stat.examplemod.focus",
+  "default_value": 0.0,
+  "min_value": 0.0
+}

@@ -3,6 +3,7 @@ package kim.biryeong.esekai2.api.skill.definition;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
 import kim.biryeong.esekai2.api.skill.tag.SkillTag;
 import kim.biryeong.esekai2.api.skill.tag.SkillTags;
 
@@ -15,6 +16,7 @@ import java.util.Set;
  * <p>These fields are loaded from JSON and interpreted by the runtime execution layer.</p>
  *
  * @param castingWeapon requirement token checked by execution-side rule resolvers
+ * @param resource stable resource id consumed by {@code resource_cost}; currently defaults to {@code mana}
  * @param resourceCost base resource cost before runtime modifiers are applied
  * @param castTimeTicks base use time in ticks before speed adjustments
  * @param cooldownTicks base cooldown in ticks before cooldown modifiers are applied
@@ -29,6 +31,7 @@ import java.util.Set;
  */
 public record SkillConfig(
         String castingWeapon,
+        String resource,
         double resourceCost,
         int castTimeTicks,
         int cooldownTicks,
@@ -43,6 +46,7 @@ public record SkillConfig(
 ) {
     private static final Codec<SkillConfig> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.STRING.optionalFieldOf("casting_weapon", "").forGetter(SkillConfig::castingWeapon),
+            Codec.STRING.optionalFieldOf("resource", PlayerResourceIds.MANA).forGetter(SkillConfig::resource),
             Codec.DOUBLE.optionalFieldOf("resource_cost", 0.0).forGetter(SkillConfig::resourceCost),
             Codec.INT.optionalFieldOf("cast_time_ticks", 0).forGetter(SkillConfig::castTimeTicks),
             Codec.INT.optionalFieldOf("cooldown_ticks", 0).forGetter(SkillConfig::cooldownTicks),
@@ -63,6 +67,7 @@ public record SkillConfig(
 
     public SkillConfig {
         Objects.requireNonNull(castingWeapon, "castingWeapon");
+        Objects.requireNonNull(resource, "resource");
         Objects.requireNonNull(style, "style");
         Objects.requireNonNull(castType, "castType");
         Objects.requireNonNull(tags, "tags");
@@ -70,6 +75,9 @@ public record SkillConfig(
     }
 
     private static DataResult<SkillConfig> validate(SkillConfig config) {
+        if (config.resource().isBlank()) {
+            return DataResult.error(() -> "resource must not be blank");
+        }
         if (!Double.isFinite(config.resourceCost()) || config.resourceCost() < 0.0) {
             return DataResult.error(() -> "resource_cost must be finite and >= 0");
         }
@@ -100,6 +108,7 @@ public record SkillConfig(
      */
     public static final SkillConfig DEFAULT = new SkillConfig(
             "",
+            PlayerResourceIds.MANA,
             0.0,
             0,
             0,

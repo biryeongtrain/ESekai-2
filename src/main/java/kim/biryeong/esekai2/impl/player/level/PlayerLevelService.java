@@ -4,6 +4,7 @@ import kim.biryeong.esekai2.api.level.LevelProgressionDefinition;
 import kim.biryeong.esekai2.api.level.LevelRegistries;
 import kim.biryeong.esekai2.api.level.LevelRules;
 import kim.biryeong.esekai2.api.player.level.PlayerLevelState;
+import kim.biryeong.esekai2.impl.player.stat.PlayerCombatStatService;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -115,6 +116,7 @@ public final class PlayerLevelService {
 
     private static PlayerLevelState store(MinecraftServer server, UUID playerId, PlayerLevelState state) {
         savedData(server).put(playerId, state);
+        PlayerCombatStatService.markDirty(server, playerId);
         return state;
     }
 

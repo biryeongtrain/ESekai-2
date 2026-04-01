@@ -1,0 +1,5 @@
+{
+  "max_stat": "esekai2:guard",
+  "regeneration_per_second_stat": "esekai2:guard_regeneration_per_second",
+  "starts_full": false
+}

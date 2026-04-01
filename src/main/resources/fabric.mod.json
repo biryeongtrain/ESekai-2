@@ -3,11 +3,17 @@
   "id": "esekai2",
   "version": "${version}",
   "name": "ESekai2",
-  "description": "",
-  "authors": [],
-  "contact": {},
+  "description": "Server-side Fabric RPG foundation mod inspired by Path of Exile, focused on data-driven skills, combat stats, affixes, and progression.",
+  "authors": [
+    "biryeongtrain"
+  ],
+  "contact": {
+    "homepage": "https://github.com/biryeongtrain/ESekai-2",
+    "sources": "https://github.com/biryeongtrain/ESekai-2",
+    "issues": "https://github.com/biryeongtrain/ESekai-2/issues",
+    "email": "biryeongtrain06@gmail.com"
+  },
   "license": "All-Rights-Reserved",
-  "icon": "assets/esekai2/icon.png",
   "environment": "server",
   "entrypoints": {
     "main": [

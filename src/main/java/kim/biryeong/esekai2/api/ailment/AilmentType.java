@@ -53,6 +53,11 @@ public enum AilmentType {
     /**
      * Returns whether this ailment's replacement semantics are driven by numeric potency.
      *
+     * <p>For the current built-in ailment set this means:
+     * {@code IGNITE}/{@code POISON}/{@code BLEED} compare periodic damage,
+     * {@code SHOCK} compares damage taken amplification, and
+     * {@code CHILL} compares percent movement slow.
+     *
      * @return {@code true} when stronger payloads should replace weaker ones
      */
     public boolean usesPotency() {
@@ -64,6 +69,10 @@ public enum AilmentType {
 
     /**
      * Returns whether this ailment blocks active skill execution while present.
+     *
+     * <p>The current server runtime uses this for both direct
+     * {@code Skills.executeOnCast(...)} and selected active skill casts. When present, execution
+     * is converted into a warning-producing runtime no-op instead of a hard failure.
      *
      * @return {@code true} when server-side cast execution should no-op
      */
@@ -96,6 +105,10 @@ public enum AilmentType {
 
     /**
      * Returns the default replacement policy used when apply_ailment omits an explicit refresh policy.
+     *
+     * <p>Potency-backed ailments default to {@code stronger_only}. Control ailments that currently
+     * care only about remaining duration, namely {@link #FREEZE} and {@link #STUN}, default to
+     * {@code longer_only}.
      *
      * @return ailment refresh policy compatible with the ailment's runtime semantics
      */

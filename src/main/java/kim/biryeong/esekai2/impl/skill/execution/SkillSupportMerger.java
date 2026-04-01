@@ -10,6 +10,7 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillActionType;
 import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
+import kim.biryeong.esekai2.api.skill.support.SkillConfigOverride;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldOverride;
 import kim.biryeong.esekai2.api.skill.support.SkillActionFieldPathType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
@@ -50,6 +51,7 @@ public final class SkillSupportMerger {
 
         Set<SkillTag> mergedTags = new LinkedHashSet<>(skill.config().tags());
         SkillAttached mergedAttached = skill.attached();
+        SkillConfig mergedConfig = skill.config();
         List<ConditionalStatModifier> additionalConditionalModifiers = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
 
@@ -61,24 +63,26 @@ public final class SkillSupportMerger {
 
                 mergedTags.addAll(effect.addedTags());
                 additionalConditionalModifiers.addAll(effect.addedConditionalStatModifiers());
+                mergedConfig = applyConfigOverrides(mergedConfig, effect.configOverrides());
                 ApplyEffectResult applyResult = applyEffect(mergedAttached, effect);
                 mergedAttached = applyResult.attached();
                 warnings.addAll(applyResult.warnings());
             }
         }
 
-        SkillConfig mergedConfig = new SkillConfig(
-                skill.config().castingWeapon(),
-                skill.config().resourceCost(),
-                skill.config().castTimeTicks(),
-                skill.config().cooldownTicks(),
-                skill.config().style(),
-                skill.config().castType(),
-                skill.config().swingArm(),
-                skill.config().applyCastSpeedToCooldown(),
-                skill.config().timesToCast(),
-                skill.config().charges(),
-                skill.config().chargeRegen(),
+        mergedConfig = new SkillConfig(
+                mergedConfig.castingWeapon(),
+                mergedConfig.resource(),
+                mergedConfig.resourceCost(),
+                mergedConfig.castTimeTicks(),
+                mergedConfig.cooldownTicks(),
+                mergedConfig.style(),
+                mergedConfig.castType(),
+                mergedConfig.swingArm(),
+                mergedConfig.applyCastSpeedToCooldown(),
+                mergedConfig.timesToCast(),
+                mergedConfig.charges(),
+                mergedConfig.chargeRegen(),
                 SkillTags.copyOf(Set.copyOf(mergedTags))
         );
 
@@ -117,6 +121,34 @@ public final class SkillSupportMerger {
         }
 
         return new ApplyEffectResult(new SkillAttached(mergedOnCast, Map.copyOf(mergedComponents)), warnings);
+    }
+
+    private static SkillConfig applyConfigOverrides(SkillConfig config, List<SkillConfigOverride> overrides) {
+        SkillConfig current = config;
+        for (SkillConfigOverride override : overrides) {
+            String resource = override.resource().orElse(current.resource());
+            double resourceCost = override.resourceCost().orElse(current.resourceCost());
+            int castTimeTicks = override.castTimeTicks().orElse(current.castTimeTicks());
+            int cooldownTicks = override.cooldownTicks().orElse(current.cooldownTicks());
+            int timesToCast = override.timesToCast().orElse(current.timesToCast());
+            int charges = override.charges().orElse(current.charges());
+            current = new SkillConfig(
+                    current.castingWeapon(),
+                    resource,
+                    resourceCost,
+                    castTimeTicks,
+                    cooldownTicks,
+                    current.style(),
+                    current.castType(),
+                    current.swingArm(),
+                    current.applyCastSpeedToCooldown(),
+                    timesToCast,
+                    charges,
+                    current.chargeRegen(),
+                    current.tags()
+            );
+        }
+        return current;
     }
 
     private static List<SkillRule> mergeRules(List<SkillRule> rules, SkillSupportEffect effect) {

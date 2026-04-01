@@ -26,6 +26,10 @@ public final class SkillRuntimeResolver {
         return resolveStatValue(skill, context, SkillStats.SKILL_RESOURCE_COST, skill.config().resourceCost());
     }
 
+    public static String resolveResource(SkillDefinition skill) {
+        return skill.config().resource();
+    }
+
     public static int resolveUseTimeTicks(SkillDefinition skill, SkillUseContext context) {
         return toWholeTicks(resolveStatValue(skill, context, SkillStats.SKILL_USE_TIME_TICKS, skill.config().castTimeTicks()));
     }

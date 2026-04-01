@@ -1,5 +1,6 @@
 package kim.biryeong.esekai2.api.skill.execution;
 
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
 
 import java.util.List;
@@ -13,7 +14,7 @@ public record PreparedResourceDeltaAction(
         double amount,
         List<SkillPredicate> enPreds
 ) implements PreparedSkillAction {
-    public static final String MANA_RESOURCE = "mana";
+    public static final String MANA_RESOURCE = PlayerResourceIds.MANA;
 
     public PreparedResourceDeltaAction {
         Objects.requireNonNull(resource, "resource");

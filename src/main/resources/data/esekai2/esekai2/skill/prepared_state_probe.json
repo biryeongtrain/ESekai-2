@@ -1,0 +1,88 @@
+{
+  "identifier": "esekai2:prepared_state_probe",
+  "config": {
+    "resource_cost": 9.0,
+    "cast_time_ticks": 13,
+    "cooldown_ticks": 7,
+    "times_to_cast": 3,
+    "charges": 2,
+    "charge_regen": 1.0,
+    "tags": [
+      "spell"
+    ]
+  },
+  "attached": {
+    "on_cast": [
+      {
+        "targets": [
+          {
+            "type": "self"
+          }
+        ],
+        "acts": [
+          {
+            "type": "heal",
+            "amount": {
+              "type": "resource_cost"
+            },
+            "en_preds": [
+              {
+                "type": "has_resource",
+                "resource": "mana",
+                "subject": "self",
+                "amount": {
+                  "type": "max_charges"
+                }
+              }
+            ]
+          },
+          {
+            "type": "resource_delta",
+            "resource": "mana",
+            "amount": {
+              "type": "use_time_ticks"
+            },
+            "en_preds": [
+              {
+                "type": "has_resource",
+                "resource": "mana",
+                "subject": "self",
+                "amount": {
+                  "type": "resource_cost"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "entity_components": {
+      "default_entity_name": [
+        {
+          "targets": [
+            {
+              "type": "aoe",
+              "radius": {
+                "type": "times_to_cast"
+              }
+            }
+          ],
+          "acts": [
+            {
+              "type": "sound",
+              "sound_id": "minecraft:block.note_block.pling"
+            }
+          ],
+          "ifs": [
+            {
+              "type": "x_ticks_condition",
+              "interval": {
+                "type": "cooldown_ticks"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

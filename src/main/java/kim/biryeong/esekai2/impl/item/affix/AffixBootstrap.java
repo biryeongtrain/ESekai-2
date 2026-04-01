@@ -19,6 +19,7 @@ public final class AffixBootstrap {
         }
 
         DynamicRegistries.register(AffixRegistries.AFFIX, AffixDefinition.CODEC);
+        ItemAffixBootstrap.bootstrap();
         bootstrapped = true;
     }
 }

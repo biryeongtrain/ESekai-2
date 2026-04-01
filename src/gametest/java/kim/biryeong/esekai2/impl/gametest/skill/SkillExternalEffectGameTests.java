@@ -197,7 +197,7 @@ public final class SkillExternalEffectGameTests {
     }
 
     /**
-     * Verifies that invalid resource_delta payloads surface warnings instead of preparing broken runtime actions.
+     * Verifies that unsupported named resource_delta payloads surface warnings while preserving the prepared action.
      */
     @GameTest
     public void prepareUseWarnsOnInvalidResourceDelta(GameTestHelper helper) {
@@ -226,10 +226,15 @@ public final class SkillExternalEffectGameTests {
                 skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
         );
 
-        helper.assertTrue(prepared.onCastActions().isEmpty(), "Invalid resource_delta payloads should not produce prepared actions");
+        PreparedResourceDeltaAction resourceAction = (PreparedResourceDeltaAction) prepared.onCastActions().stream()
+                .filter(PreparedResourceDeltaAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Unsupported named resource_delta payloads should still prepare a resource_delta action"));
+        helper.assertValueEqual(resourceAction.resource(), "life",
+                "Unsupported named resource_delta payloads should preserve the configured resource id");
         helper.assertTrue(
-                prepared.warnings().stream().anyMatch(warning -> warning.contains("resource_delta")),
-                "Invalid resource_delta payloads should surface a preparation warning"
+                prepared.warnings().stream().anyMatch(warning -> warning.contains("resource_delta references unsupported resource: life")),
+                "Unsupported named resource_delta payloads should surface a preparation warning"
         );
         helper.succeed();
     }
@@ -364,7 +369,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void executeOnCastAppliesManaDeltaToPlayer(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         StatHolder attacker = newHolder(helper);
         attacker.setBaseValue(CombatStats.MANA, 20.0);
         PlayerResources.setMana(player, 3.0, 20.0);
@@ -441,7 +446,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastRemovesMultipleEffectsFromCaster(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -486,7 +491,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void executeOnCastPurgePositiveRemovesBeneficialEffects(GameTestHelper helper) {
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -521,7 +526,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgeNegativeRemovesHarmfulEffectsAndAilments(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -568,7 +573,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgeAllRemovesAllActiveEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -610,7 +615,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgeUnionRemovesExplicitAndPurgedTargets(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -677,7 +682,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastRemovesPresentSubsetOfConfiguredEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         PreparedSkillUse poisonPrepared = Skills.prepareUse(
                 venomStrike(helper),
                 skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
@@ -732,7 +737,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void executeOnCastPurgesPositiveEffects(GameTestHelper helper) {
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -767,7 +772,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgesNegativeEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -814,7 +819,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgesAllEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -861,7 +866,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void executeOnCastPurgesUnionOfPositiveAndExplicitEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer caster = helper.makeMockServerPlayerInLevel();
+        ServerPlayer caster = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         caster.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -955,7 +960,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesEffectSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.STICK, CRIPPLING_HEX_SKILL_ID, List.of(supportRef(1, SUPPORT_LASTING_HEX_ID)))
@@ -983,7 +988,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesEffectAliasOverrideToLegacyBuff(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.STICK, BATTLE_FOCUS_SKILL_ID, List.of(supportRef(1, SUPPORT_QUICK_FOCUS_ID)))
@@ -1011,7 +1016,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesRemoveEffectSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.STICK, CLEANSE_FOCUS_SKILL_ID, List.of(supportRef(1, SUPPORT_TOXIC_CLEANSE_ID)))
@@ -1039,7 +1044,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesMultiRemoveEffectSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.STICK, CLEANSE_FOCUS_SKILL_ID, List.of(supportRef(1, SUPPORT_COMPOUND_CLEANSE_ID)))
@@ -1070,7 +1075,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesPurgeSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.STICK, PURITY_WAVE_SKILL_ID, List.of(supportRef(1, SUPPORT_MALEVOLENT_WAVE_ID)))
@@ -1097,7 +1102,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void castSelectedSkillRemovesPoisonAilmentEffectAndAttachment(GameTestHelper helper) {
         Player caster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         PreparedSkillUse poisonPrepared = Skills.prepareUse(
                 venomStrike(helper),
                 skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99)
@@ -1138,7 +1143,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void castSelectedSkillRemovesSupportOverrideEffectList(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID)),
                 80,
@@ -1188,7 +1193,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void castSelectedSkillPurgesSupportOverriddenNegativeEffects(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -1240,7 +1245,7 @@ public final class SkillExternalEffectGameTests {
     @GameTest
     public void castSelectedSkillRemovesSupportOverridePurgeTargets(GameTestHelper helper) {
         Player setupCaster = helper.makeMockPlayer(GameType.CREATIVE);
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.addEffect(new MobEffectInstance(
                 BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID)),
                 80,
@@ -1290,7 +1295,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void castSelectedSkillAppliesEffectToTarget(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
@@ -1314,7 +1319,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesDotSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.BLAZE_ROD, SEARING_BRAND_SKILL_ID, List.of(supportRef(1, SUPPORT_LINGERING_BRAND_ID)))
@@ -1341,7 +1346,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesHealSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.GHAST_TEAR, RESTORATIVE_PULSE_SKILL_ID, List.of(supportRef(1, SUPPORT_EMPOWERING_PULSE_ID)))
@@ -1368,7 +1373,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesResourceDeltaSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 socketedSkillStack(Items.LAPIS_LAZULI, MANA_SURGE_SKILL_ID, List.of(supportRef(1, SUPPORT_ABUNDANT_SURGE_ID)))
@@ -1395,7 +1400,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void castSelectedSkillAppliesHealSupportOverrideAtRuntime(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setHealth(player.getMaxHealth() - 10.0F);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
@@ -1420,7 +1425,7 @@ public final class SkillExternalEffectGameTests {
      */
     @GameTest
     public void castSelectedSkillAppliesResourceDeltaSupportOverrideAtRuntime(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         StatHolder attacker = newHolder(helper);
         attacker.setBaseValue(CombatStats.MANA, 20.0);
         PlayerResources.setMana(player, 5.0, 20.0);

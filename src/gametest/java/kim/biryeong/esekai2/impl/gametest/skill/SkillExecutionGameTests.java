@@ -4,7 +4,9 @@ import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
 import kim.biryeong.esekai2.api.player.resource.PlayerResources;
+import kim.biryeong.esekai2.api.player.stat.PlayerCombatStats;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillBurstState;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillBursts;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillCharges;
@@ -26,7 +28,11 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicateType;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetSelector;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetType;
+import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
+import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillEntityComponent;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
@@ -34,6 +40,7 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
+import kim.biryeong.esekai2.api.skill.execution.SkillUseContexts;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportDefinition;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportEffect;
@@ -42,7 +49,10 @@ import kim.biryeong.esekai2.api.skill.support.SkillSupportRuleAppendTarget;
 import kim.biryeong.esekai2.api.skill.support.SkillSupportRuleTargetType;
 import kim.biryeong.esekai2.api.skill.tag.SkillTagCondition;
 import kim.biryeong.esekai2.api.skill.stat.SkillStats;
+import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import kim.biryeong.esekai2.api.stat.combat.CombatStats;
+import kim.biryeong.esekai2.api.stat.definition.StatDefinition;
+import kim.biryeong.esekai2.api.stat.definition.StatRegistries;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.api.stat.modifier.ConditionalStatModifier;
@@ -57,6 +67,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -86,6 +97,12 @@ public final class SkillExecutionGameTests {
     private static final Identifier CHARGED_SURGE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_surge");
     private static final Identifier CHARGED_RESERVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_reserve");
     private static final Identifier OVERWORLD_BARRIER_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "overworld_barrier");
+    private static final Identifier SUPPORT_GUARD_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_guard_focus");
+    private static final Identifier SUPPORT_BROKEN_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_broken_focus");
+    private static final ResourceKey<StatDefinition> GUARD_STAT = ResourceKey.create(
+            StatRegistries.STAT,
+            Identifier.fromNamespaceAndPath("esekai2", "guard")
+    );
 
     /**
      * Verifies that the skill registry loads the sample definition set used by these runtime tests.
@@ -147,6 +164,7 @@ public final class SkillExecutionGameTests {
                 SkillPredicateType.HAS_EFFECT,
                 Map.of("effect_id", "minecraft:speed", "subject", "self")
         );
+        SkillPredicate hasResourcePredicate = SkillPredicate.hasResource("guard", SkillValueExpression.constant(3.0), SkillPredicateSubject.SELF);
 
         SkillCondition decodedCondition = SkillCondition.CODEC.parse(
                 JsonOps.INSTANCE,
@@ -164,10 +182,62 @@ public final class SkillExecutionGameTests {
                 SkillPredicate.CODEC.encodeStart(JsonOps.INSTANCE, hasEffectPredicate)
                         .getOrThrow(message -> new IllegalStateException("Failed to encode has_effect predicate: " + message))
         ).getOrThrow(message -> new IllegalStateException("Failed to decode has_effect predicate: " + message));
+        SkillPredicate decodedHasResourcePredicate = SkillPredicate.CODEC.parse(
+                JsonOps.INSTANCE,
+                SkillPredicate.CODEC.encodeStart(JsonOps.INSTANCE, hasResourcePredicate)
+                        .getOrThrow(message -> new IllegalStateException("Failed to encode has_resource predicate: " + message))
+        ).getOrThrow(message -> new IllegalStateException("Failed to decode has_resource predicate: " + message));
 
         helper.assertValueEqual(decodedCondition, condition, "Skill condition codec should preserve x-tick payloads");
         helper.assertValueEqual(decodedPredicate, predicate, "Skill predicate codec should preserve random chance payloads");
         helper.assertValueEqual(decodedHasEffectPredicate, hasEffectPredicate, "Skill predicate codec should preserve has_effect payloads");
+        helper.assertValueEqual(decodedHasResourcePredicate, hasResourcePredicate, "Skill predicate codec should preserve has_resource payloads");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that has_resource predicates evaluate registered player resources and fail safely for missing player subjects.
+     */
+    @GameTest
+    public void hasResourcePredicateMatchesRegisteredPlayerResources(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        PlayerCombatStats.get(player).setBaseValue(GUARD_STAT, 10.0);
+        PlayerResources.set(player, "guard", 5.0);
+
+        PreparedSkillUse prepared = Skills.prepareUse(basicStrike(helper), SkillUseContexts.forPlayer(player, 0.0, 0.0));
+        SkillExecutionContext executionContext = SkillExecutionContext.forCast(prepared, (net.minecraft.server.level.ServerLevel) player.level(), player, Optional.empty());
+
+        helper.assertTrue(SkillPredicate.hasResource("guard", SkillValueExpression.constant(4.0), SkillPredicateSubject.SELF).matches(executionContext),
+                "has_resource should pass when the self player has at least the required registered resource amount");
+        helper.assertTrue(!SkillPredicate.hasResource("guard", SkillValueExpression.constant(6.0), SkillPredicateSubject.SELF).matches(executionContext),
+                "has_resource should fail when the self player lacks the required registered resource amount");
+        helper.assertTrue(!SkillPredicate.hasResource("guard", SkillValueExpression.constant(1.0), SkillPredicateSubject.TARGET).matches(executionContext),
+                "has_resource should fail safely when the selected target subject does not resolve to a player");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that current-resource and max-resource expressions resolve through live player resource lookups.
+     */
+    @GameTest
+    public void resourceValueExpressionsResolveThroughPlayerContexts(GameTestHelper helper) {
+        ServerPlayer attacker = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        ServerPlayer target = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        PlayerCombatStats.get(attacker).setBaseValue(GUARD_STAT, 10.0);
+        PlayerCombatStats.get(target).setBaseValue(GUARD_STAT, 12.0);
+        PlayerResources.set(attacker, "guard", 6.0);
+        PlayerResources.set(target, "guard", 4.0);
+
+        SkillUseContext context = SkillUseContexts.forPlayer(attacker, Optional.of(target), 0.0, 0.0);
+
+        helper.assertValueEqual(SkillValueExpression.currentResource("guard", SkillPredicateSubject.SELF).resolve(context), 6.0,
+                "Current-resource expressions should read the self resource amount from the live lookup");
+        helper.assertValueEqual(SkillValueExpression.currentResource("guard", SkillPredicateSubject.TARGET).resolve(context), 4.0,
+                "Current-resource expressions should read the target resource amount from the live lookup");
+        helper.assertValueEqual(SkillValueExpression.maxResource("guard", SkillPredicateSubject.SELF).resolve(context), 10.0,
+                "Max-resource expressions should read the self resource maximum from the live lookup");
+        helper.assertValueEqual(SkillValueExpression.maxResource("guard", SkillPredicateSubject.PRIMARY_TARGET).resolve(context), 12.0,
+                "Max-resource expressions should read the primary-target resource maximum from the live lookup");
         helper.succeed();
     }
 
@@ -292,9 +362,292 @@ public final class SkillExecutionGameTests {
     public void skillRuntimeValuesUseBaseConfigWithoutModifiers(GameTestHelper helper) {
         PreparedSkillUse prepared = Skills.prepareUse(fireball(helper), skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.99));
 
+        helper.assertValueEqual(prepared.resource(), PlayerResourceIds.MANA, "Skills without an explicit resource override should default to mana");
         helper.assertValueEqual(prepared.resourceCost(), 12.0, "Base skill resource cost should remain unchanged without modifiers");
         helper.assertValueEqual(prepared.useTimeTicks(), 16, "Base use-time should remain unchanged without modifiers");
         helper.assertValueEqual(prepared.cooldownTicks(), 0, "Base cooldown should remain unchanged without modifiers");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that legacy skill config decode defaults the resource id to mana when the field is omitted.
+     */
+    @GameTest
+    public void skillConfigDefaultsResourceToMana(GameTestHelper helper) {
+        SkillConfig decoded = SkillConfig.CODEC.parse(
+                JsonOps.INSTANCE,
+                JsonOps.INSTANCE.createMap(Map.of(
+                        JsonOps.INSTANCE.createString("resource_cost"), JsonOps.INSTANCE.createDouble(4.0)
+                ))
+        ).getOrThrow(message -> new IllegalStateException("Failed to decode skill config: " + message));
+
+        helper.assertValueEqual(decoded.resource(), PlayerResourceIds.MANA, "Legacy skill configs should default resource to mana");
+        helper.assertValueEqual(decoded.resourceCost(), 4.0, "Legacy skill configs should preserve resource cost");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that unsupported non-mana skill cost resources are preserved at preparation time and safely block runtime execution.
+     */
+    @GameTest
+    public void executeOnCastBlocksUnsupportedSkillCostResource(GameTestHelper helper) {
+        SkillDefinition unsupportedResourceSkill = testSkill(
+                "esekai2:unsupported_cost_resource",
+                new SkillConfig(
+                        "",
+                        "life",
+                        4.0,
+                        0,
+                        0,
+                        "",
+                        "",
+                        false,
+                        false,
+                        1,
+                        0,
+                        0.0,
+                        Set.of()
+                ),
+                List.of(new SkillRule(Set.of(SkillTargetSelector.self()), List.of(soundAction("minecraft:block.note_block.harp")), List.of(), List.of())),
+                Map.of()
+        );
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                unsupportedResourceSkill,
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.99)
+        );
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                hooks
+        );
+
+        helper.assertValueEqual(prepared.resource(), "life", "Preparation should preserve non-mana resource ids for future generic runtime expansion");
+        helper.assertValueEqual(result.executedActions(), 0, "Unsupported cost resources should block runtime execution before on-cast actions run");
+        helper.assertValueEqual(hooks.soundCount(), 0, "Unsupported cost resources should not emit on-cast sound actions");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("unsupported resource=life")),
+                "Unsupported cost resources should surface a clear runtime warning");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0, "Unsupported non-mana cost resources should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that direct casts spend the support-overridden guard resource instead of mana.
+     */
+    @GameTest
+    public void executeOnCastSpendsSupportOverriddenGuardResourceInsteadOfMana(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support(helper, SUPPORT_GUARD_FOCUS_ID)))
+        );
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerCombatStats.get(player).setBaseValue(GUARD_STAT, 10.0);
+        PlayerResources.set(player, "guard", 5.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                new RecordingHooks()
+        );
+
+        helper.assertValueEqual(prepared.resource(), "guard", "Support config_overrides should rewrite the direct prepared resource id");
+        helper.assertValueEqual(prepared.resourceCost(), 3.0, "Support config_overrides should rewrite the direct prepared resource cost");
+        helper.assertValueEqual(SkillValueExpression.resourceCost().resolve(prepared.useContext()), 3.0,
+                "Prepared resource_cost expressions should observe the support-overridden direct prepared resource cost");
+        helper.assertTrue(result.executedActions() > 0, "Guard-backed direct casts should execute when the player has enough guard");
+        helper.assertValueEqual(PlayerResources.getAmount(player, "guard", 10.0), 2.0, "Successful guard-backed direct casts should spend guard");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0, "Guard-backed direct casts should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that prepared graph payloads can reuse resolved prepared-state values across action, selector, condition, and predicate surfaces.
+     */
+    @GameTest
+    public void prepareUseInjectsPreparedStateValuesIntoGraphPayloads(GameTestHelper helper) {
+        SkillDefinition skill = testSkill(
+                "esekai2:prepared_state_probe",
+                new SkillConfig(
+                        "",
+                        PlayerResourceIds.MANA,
+                        4.0,
+                        6,
+                        8,
+                        "",
+                        "",
+                        false,
+                        false,
+                        3,
+                        2,
+                        1.0,
+                        Set.of()
+                ),
+                List.of(new SkillRule(
+                        Set.of(SkillTargetSelector.aoe(SkillValueExpression.timesToCast())),
+                        List.of(
+                                typedResourceDeltaAction("guard", SkillValueExpression.resourceCost()),
+                                typedHealAction(SkillValueExpression.maxCharges())
+                        ),
+                        List.of(),
+                        List.of(SkillPredicate.hasResource("guard", SkillValueExpression.resourceCost(), SkillPredicateSubject.SELF))
+                )),
+                Map.of(
+                        "cooldown_pulse", List.of(new SkillRule(
+                                Set.of(SkillTargetSelector.self()),
+                                List.of(soundAction("minecraft:entity.experience_orb.pickup")),
+                                List.of(SkillCondition.everyTicks(SkillValueExpression.cooldownTicks())),
+                                List.of()
+                        )),
+                        "use_time_pulse", List.of(new SkillRule(
+                                Set.of(SkillTargetSelector.self()),
+                                List.of(soundAction("minecraft:entity.experience_orb.pickup")),
+                                List.of(SkillCondition.everyTicks(SkillValueExpression.useTimeTicks())),
+                                List.of()
+                        ))
+                )
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+        );
+
+        PreparedResourceDeltaAction delta = (PreparedResourceDeltaAction) prepared.onCastActions().stream()
+                .filter(PreparedResourceDeltaAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared on-cast actions should include one resource_delta action"));
+        PreparedHealAction heal = (PreparedHealAction) prepared.onCastActions().stream()
+                .filter(PreparedHealAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared on-cast actions should include one heal action"));
+
+        helper.assertValueEqual(delta.amount(), 4.0,
+                "resource_delta.amount should resolve from the prepared resource_cost value");
+        helper.assertValueEqual(heal.amount(), 2.0,
+                "heal.amount should resolve from the prepared max_charges value");
+        helper.assertValueEqual(
+                prepared.onCastRoutes().getFirst().targets().stream().findFirst().orElseThrow().radius().resolve(prepared.useContext()),
+                3.0,
+                "AOE selector radius should resolve from the prepared times_to_cast value"
+        );
+        helper.assertValueEqual(
+                prepared.onCastRoutes().getFirst().enPreds().getFirst().amount().resolve(prepared.useContext()),
+                4.0,
+                "has_resource.amount should resolve from the prepared resource_cost value"
+        );
+        helper.assertValueEqual(prepared.component("cooldown_pulse").tickActions().getFirst().intervalTicks(), 8,
+                "X-ticks conditions should resolve cooldown_ticks from the prepared context");
+        helper.assertValueEqual(prepared.component("use_time_pulse").tickActions().getFirst().intervalTicks(), 6,
+                "X-ticks conditions should resolve use_time_ticks from the prepared context");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that registered support-overridden resources still block direct casts when the player has no max pool for that resource.
+     */
+    @GameTest
+    public void executeOnCastBlocksSupportOverriddenResourceWhenRegisteredPoolIsZero(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support(helper, SUPPORT_GUARD_FOCUS_ID)))
+        );
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                hooks
+        );
+
+        helper.assertValueEqual(prepared.resource(), "guard", "Preparation should preserve the registered support-overridden resource id");
+        helper.assertValueEqual(result.executedActions(), 0, "Zero-pool registered resources should block direct runtime execution");
+        helper.assertValueEqual(hooks.soundCount(), 0, "Zero-pool registered resources should not emit direct runtime actions");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("guard required=3.0")),
+                "Zero-pool registered resources should surface a guard resource warning");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0, "Zero-pool registered resources should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that unsupported support-overridden resources fail safely before direct runtime actions execute.
+     */
+    @GameTest
+    public void executeOnCastBlocksUnsupportedSupportOverriddenResource(GameTestHelper helper) {
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support(helper, SUPPORT_BROKEN_FOCUS_ID)))
+        );
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
+        PlayerCombatStats.get(player).setBaseValue(GUARD_STAT, 10.0);
+        PlayerResources.set(player, "guard", 5.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        RecordingHooks hooks = new RecordingHooks();
+        SkillExecutionResult result = Skills.executeOnCast(
+                SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty()),
+                hooks
+        );
+
+        helper.assertValueEqual(prepared.resource(), "life", "Preparation should preserve unsupported resource overrides for runtime safety checks");
+        helper.assertValueEqual(result.executedActions(), 0, "Unsupported overridden resources should block direct runtime execution");
+        helper.assertValueEqual(hooks.soundCount(), 0, "Unsupported overridden resources should not emit on-cast sound actions");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("unsupported resource=life")),
+                "Unsupported overridden resources should surface a clear runtime warning");
+        helper.assertValueEqual(PlayerResources.getAmount(player, "guard", 10.0), 5.0, "Unsupported overridden resources should not spend guard");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0, "Unsupported overridden resources should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that unsupported resource_delta actions preserve their resource id during preparation and emit a warning.
+     */
+    @GameTest
+    public void prepareUseWarnsAndPreservesUnsupportedResourceDeltaAction(GameTestHelper helper) {
+        SkillDefinition unsupportedResourceDeltaSkill = testSkill(
+                "esekai2:unsupported_resource_delta",
+                List.of(new SkillRule(
+                        Set.of(SkillTargetSelector.self()),
+                        List.of(new SkillAction(SkillActionType.RESOURCE_DELTA, Map.of(
+                                "resource", "life",
+                                "amount", "4.0"
+                        ))),
+                        List.of(),
+                        List.of()
+                )),
+                Map.of()
+        );
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                unsupportedResourceDeltaSkill,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.99)
+        );
+
+        helper.assertTrue(prepared.warnings().stream().anyMatch(warning -> warning.contains("resource_delta references unsupported resource: life")),
+                "Unsupported resource_delta actions should surface a preparation warning");
+        PreparedResourceDeltaAction resourceAction = (PreparedResourceDeltaAction) prepared.onCastActions().stream()
+                .filter(PreparedResourceDeltaAction.class::isInstance)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Unsupported resource_delta actions should still prepare a resource_delta action"));
+        helper.assertValueEqual(resourceAction.resource(), "life",
+                "Unsupported resource_delta actions should preserve their configured resource id during preparation");
         helper.succeed();
     }
 
@@ -1279,8 +1632,8 @@ public final class SkillExecutionGameTests {
 
         helper.assertValueEqual(result.executedActions(), 0, "Disabled-dimension skills should be blocked before runtime actions execute");
         helper.assertValueEqual(hooks.soundCount(), 0, "Disabled-dimension direct casts should not emit on-cast sound actions");
-        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("dimension")),
-                "Disabled-dimension direct casts should surface a warning");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("minecraft:overworld")),
+                "Disabled-dimension direct casts should surface the resolved dimension id in the warning");
         helper.succeed();
     }
 
@@ -1293,7 +1646,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, BATTLE_FOCUS_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         RecordingHooks firstHooks = new RecordingHooks();
@@ -1319,6 +1672,36 @@ public final class SkillExecutionGameTests {
     }
 
     /**
+     * Verifies that cooldown_remaining and cooldown_ready reflect helper-built direct player cooldown state.
+     */
+    @GameTest
+    public void cooldownRuntimeValueAndPredicateReflectDirectPlayerCooldownState(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        PlayerCombatStats.get(player).setBaseValue(CombatStats.MANA, 20.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BATTLE_FOCUS_SKILL_ID),
+                SkillUseContexts.forPlayer(player, 0.0, 0.0)
+        );
+        SkillExecutionContext executionContext = SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty());
+
+        helper.assertValueEqual(SkillValueExpression.cooldownRemaining().resolve(prepared.useContext()), 0.0,
+                "cooldown_remaining should start at zero before the first successful direct cast");
+        helper.assertTrue(SkillPredicate.cooldownReady().matches(executionContext),
+                "cooldown_ready should pass before the first successful direct cast");
+
+        SkillExecutionResult result = Skills.executeOnCast(executionContext);
+
+        helper.assertTrue(result.executedActions() > 0, "The cooldown test cast should execute successfully");
+        helper.assertTrue(SkillValueExpression.cooldownRemaining().resolve(executionContext) > 0.0,
+                "cooldown_remaining should become positive after the successful direct cast");
+        helper.assertFalse(SkillPredicate.cooldownReady().matches(executionContext),
+                "cooldown_ready should fail while the direct cast cooldown is active");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that direct player-sourced executeOnCast spends mana only when the attacker mana stat is positive.
      */
     @GameTest
@@ -1329,7 +1712,7 @@ public final class SkillExecutionGameTests {
                 fireball(helper),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.99)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 20.0, 20.0);
 
@@ -1355,7 +1738,7 @@ public final class SkillExecutionGameTests {
                 fireball(helper),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.99)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 5.0, 20.0);
 
@@ -1382,7 +1765,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_SURGE_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         RecordingHooks firstHooks = new RecordingHooks();
@@ -1407,6 +1790,33 @@ public final class SkillExecutionGameTests {
     }
 
     /**
+     * Verifies that charges_available and has_charges reflect helper-built direct player charge state.
+     */
+    @GameTest
+    public void chargesRuntimeValueAndPredicateReflectDirectPlayerChargeState(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, CHARGED_SURGE_SKILL_ID),
+                SkillUseContexts.forPlayer(player, 0.0, 0.0)
+        );
+        SkillExecutionContext executionContext = SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty());
+
+        helper.assertValueEqual(SkillValueExpression.chargesAvailable().resolve(prepared.useContext()), 1.0,
+                "charges_available should expose the initial stored charge count for the direct cast");
+        helper.assertTrue(SkillPredicate.hasCharges().matches(executionContext),
+                "has_charges should pass while the direct cast still has an available charge");
+
+        SkillExecutionResult result = Skills.executeOnCast(executionContext);
+
+        helper.assertTrue(result.executedActions() > 0, "The charged direct cast should execute successfully");
+        helper.assertValueEqual(SkillValueExpression.chargesAvailable().resolve(executionContext), 0.0,
+                "charges_available should drop to zero after the only stored charge is consumed");
+        helper.assertFalse(SkillPredicate.hasCharges().matches(executionContext),
+                "has_charges should fail once the direct cast has no stored charges left");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that direct player-sourced executeOnCast blocks when a charged skill has no stored charges remaining.
      */
     @GameTest
@@ -1415,7 +1825,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_SURGE_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         Skills.executeOnCast(
@@ -1445,7 +1855,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_SURGE_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         Skills.executeOnCast(
@@ -1475,7 +1885,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_RESERVE_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         SkillExecutionResult first = Skills.executeOnCast(
@@ -1517,7 +1927,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_RESERVE_SKILL_ID),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 20.0, 20.0);
 
@@ -1559,7 +1969,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, CHARGED_RESERVE_SKILL_ID),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 20.0, 20.0);
         PlayerSkillCharges.setAvailableCharges(player, CHARGED_RESERVE_SKILL_ID, 0, 2, helper.getLevel().getGameTime());
@@ -1588,7 +1998,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, BURST_STRIKE_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         RecordingHooks firstHooks = new RecordingHooks();
@@ -1645,6 +2055,41 @@ public final class SkillExecutionGameTests {
     }
 
     /**
+     * Verifies that burst_remaining and has_burst_followup reflect helper-built direct player burst state.
+     */
+    @GameTest
+    public void burstRuntimeValueAndPredicateReflectDirectPlayerBurstState(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                skill(helper, BURST_FOCUS_SKILL_ID),
+                SkillUseContexts.forPlayer(player, 0.0, 0.0)
+        );
+        SkillExecutionContext executionContext = SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty());
+
+        helper.assertValueEqual(SkillValueExpression.burstRemaining().resolve(prepared.useContext()), 0.0,
+                "burst_remaining should start at zero before the opener creates an active burst window");
+        helper.assertFalse(SkillPredicate.hasBurstFollowup().matches(executionContext),
+                "has_burst_followup should fail before the opener creates an active burst window");
+
+        SkillExecutionResult opener = Skills.executeOnCast(executionContext);
+
+        helper.assertValueEqual(opener.executedActions(), 1, "The burst opener should execute successfully");
+        helper.assertValueEqual(SkillValueExpression.burstRemaining().resolve(executionContext), 1.0,
+                "burst_remaining should expose the remaining follow-up cast after the opener");
+        helper.assertTrue(SkillPredicate.hasBurstFollowup().matches(executionContext),
+                "has_burst_followup should pass while the active burst still has a follow-up cast");
+
+        SkillExecutionResult followup = Skills.executeOnCast(executionContext);
+
+        helper.assertValueEqual(followup.executedActions(), 1, "The allowed burst follow-up should execute successfully");
+        helper.assertValueEqual(SkillValueExpression.burstRemaining().resolve(executionContext), 0.0,
+                "burst_remaining should return to zero after the final follow-up is consumed");
+        helper.assertFalse(SkillPredicate.hasBurstFollowup().matches(executionContext),
+                "has_burst_followup should fail after the final follow-up is consumed");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that a successful direct cast of a different skill resets the previous burst window immediately.
      */
     @GameTest
@@ -1657,7 +2102,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, BATTLE_FOCUS_SKILL_ID),
                 new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
 
         SkillExecutionResult firstBurst = Skills.executeOnCast(
@@ -1705,7 +2150,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, BURST_RESERVE_SKILL_ID),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 20.0, 20.0);
 
@@ -1779,7 +2224,7 @@ public final class SkillExecutionGameTests {
                 skill(helper, BURST_FOCUS_SKILL_ID),
                 skillUseContext(helper, attacker, newHolder(helper), List.of(), 0.0, 0.0)
         );
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.snapTo(helper.absoluteVec(new Vec3(1.0, 2.0, 1.0)));
         PlayerResources.setMana(player, 6.0, 6.0);
 
@@ -1899,6 +2344,11 @@ public final class SkillExecutionGameTests {
                 .orElseThrow(() -> helper.assertionException("Skill should decode successfully: " + id));
     }
 
+    private static SkillSupportDefinition support(GameTestHelper helper, Identifier id) {
+        return helper.getLevel().getServer().registryAccess().lookupOrThrow(SkillRegistries.SKILL_SUPPORT).getOptional(id)
+                .orElseThrow(() -> helper.assertionException("Support should decode successfully: " + id));
+    }
+
     private static Registry<SkillCalculationDefinition> skillCalculationRegistry(GameTestHelper helper) {
         return SkillCalculationRegistryAccess.skillCalculationRegistry(helper);
     }
@@ -1927,11 +2377,104 @@ public final class SkillExecutionGameTests {
     }
 
     private static SkillDefinition testSkill(String identifier, List<SkillRule> onCast, Map<String, List<SkillRule>> components) {
-        return new SkillDefinition(identifier, SkillConfig.DEFAULT, new SkillAttached(onCast, components), "", Set.of(), "");
+        return testSkill(identifier, SkillConfig.DEFAULT, onCast, components);
+    }
+
+    private static SkillDefinition testSkill(
+            String identifier,
+            SkillConfig config,
+            List<SkillRule> onCast,
+            Map<String, List<SkillRule>> components
+    ) {
+        return new SkillDefinition(identifier, config, new SkillAttached(onCast, components), "", Set.of(), "");
     }
 
     private static SkillAction soundAction(String soundId) {
         return new SkillAction(SkillActionType.SOUND, Map.of("sound", soundId));
+    }
+
+    private static SkillAction typedHealAction(SkillValueExpression amount) {
+        return new SkillAction(
+                SkillActionType.HEAL,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                List.of(),
+                Optional.empty(),
+                "",
+                "",
+                kim.biryeong.esekai2.api.damage.critical.HitKind.ATTACK,
+                Map.of(),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                amount,
+                SkillValueExpression.constant(1.0),
+                SkillValueExpression.constant(1.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(1.0),
+                false,
+                false,
+                true,
+                true,
+                MobEffectRefreshPolicy.OVERWRITE,
+                SkillAilmentRefreshPolicy.OVERWRITE,
+                "self",
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                List.of()
+        );
+    }
+
+    private static SkillAction typedResourceDeltaAction(String resource, SkillValueExpression amount) {
+        return new SkillAction(
+                SkillActionType.RESOURCE_DELTA,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                resource,
+                "",
+                List.of(),
+                Optional.empty(),
+                "",
+                "",
+                kim.biryeong.esekai2.api.damage.critical.HitKind.ATTACK,
+                Map.of(),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                amount,
+                SkillValueExpression.constant(1.0),
+                SkillValueExpression.constant(1.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(100.0),
+                SkillValueExpression.constant(1.0),
+                false,
+                false,
+                true,
+                true,
+                MobEffectRefreshPolicy.OVERWRITE,
+                SkillAilmentRefreshPolicy.OVERWRITE,
+                "self",
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                SkillValueExpression.constant(0.0),
+                List.of()
+        );
     }
 
     private static MobEffectInstance effect(GameTestHelper helper, Identifier effectId) {

@@ -159,6 +159,9 @@ public record SkillTargetSelector(
         if (expression.isStat()) {
             return expression.statId().toString();
         }
-        return expression.referenceId();
+        if (expression.isReference()) {
+            return expression.referenceId();
+        }
+        return expression.type().serializedName();
     }
 }

@@ -21,6 +21,7 @@ public final class CombatStatsGameTests {
 
         assertDefinition(helper, holder.stat(CombatStats.LIFE), 20.0, Optional.of(1.0), Optional.empty(), "Life");
         assertDefinition(helper, holder.stat(CombatStats.MANA), 0.0, Optional.of(0.0), Optional.empty(), "Mana");
+        assertDefinition(helper, holder.stat(CombatStats.MANA_REGENERATION_PER_SECOND), 0.0, Optional.of(0.0), Optional.empty(), "Mana regeneration per second");
         assertDefinition(helper, holder.stat(CombatStats.ENERGY_SHIELD), 0.0, Optional.of(0.0), Optional.empty(), "Energy shield");
         assertDefinition(helper, holder.stat(CombatStats.ARMOUR), 0.0, Optional.of(0.0), Optional.empty(), "Armour");
         assertDefinition(helper, holder.stat(CombatStats.EVADE), 0.0, Optional.of(0.0), Optional.empty(), "Evade");

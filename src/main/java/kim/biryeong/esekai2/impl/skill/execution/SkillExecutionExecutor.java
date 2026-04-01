@@ -6,13 +6,13 @@ import kim.biryeong.esekai2.api.player.skill.PlayerSkillBursts;
 import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillCharges;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillCooldowns;
-import kim.biryeong.esekai2.api.stat.combat.CombatStats;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillExecutionRoute;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionResult;
 import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
+import kim.biryeong.esekai2.impl.player.resource.PlayerResourceService;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Internal executor that turns prepared routes into world hooks.
@@ -33,7 +31,6 @@ import java.util.regex.Pattern;
 public final class SkillExecutionExecutor {
     public static final String BLOCKED_WARNING_PREFIX = "Skill execution blocked: ";
     private static final long BURST_WINDOW_TICKS = 10L;
-    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
     private SkillExecutionExecutor() {
     }
@@ -246,9 +243,9 @@ public final class SkillExecutionExecutor {
             blocked = true;
         }
 
-        String manaWarning = manaWarning(context);
-        if (manaWarning != null) {
-            warnings.add(manaWarning);
+        String resourceWarning = resourceWarning(context);
+        if (resourceWarning != null) {
+            warnings.add(resourceWarning);
             blocked = true;
         }
 
@@ -305,8 +302,9 @@ public final class SkillExecutionExecutor {
             PlayerSkillCooldowns.start(player, skillId, readyGameTime);
         }
 
-        double maxMana = resolvedMaxMana(context);
-        if (maxMana <= 0.0) {
+        String resource = resolvedResource(context);
+        double maxResource = resolvedMaxResource(context, resource);
+        if (maxResource <= 0.0) {
             PlayerSkillBursts.recordSuccessfulCast(
                     player,
                     skillId,
@@ -318,8 +316,8 @@ public final class SkillExecutionExecutor {
         }
 
         double resourceCost = resolvedResourceCost(context);
-        if (resourceCost > 0.0) {
-            PlayerResources.spendMana(player, resourceCost, maxMana);
+        if (resourceCost > 0.0 && PlayerResources.supports(resource)) {
+            PlayerResources.spend(player, resource, resourceCost, maxResource);
         }
 
         PlayerSkillBursts.recordSuccessfulCast(
@@ -367,27 +365,35 @@ public final class SkillExecutionExecutor {
         return BLOCKED_WARNING_PREFIX + "cooldown " + skillId + " (" + remaining + " ticks remaining)";
     }
 
-    private static String manaWarning(SkillExecutionContext context) {
+    private static String resourceWarning(SkillExecutionContext context) {
         ServerPlayer player = resolvePlayer(context);
         if (player == null) {
             return null;
         }
 
-        double maxMana = resolvedMaxMana(context);
-        if (maxMana <= 0.0) {
-            return null;
-        }
-
+        String resource = resolvedResource(context);
         double resourceCost = resolvedResourceCost(context);
         if (resourceCost <= 0.0) {
             return null;
         }
 
-        double currentMana = PlayerResources.getMana(player, maxMana);
-        if (currentMana + 1.0E-6 >= resourceCost) {
+        if (!PlayerResources.supports(resource)) {
+            return BLOCKED_WARNING_PREFIX + "unsupported resource=" + resource;
+        }
+
+        double maxResource = resolvedMaxResource(context, resource);
+        if (maxResource <= 0.0) {
+            if (kim.biryeong.esekai2.api.player.resource.PlayerResourceIds.MANA.equals(resource)) {
+                return null;
+            }
+            return BLOCKED_WARNING_PREFIX + resource + " required=" + resourceCost + ", current=0.0, max=0.0";
+        }
+
+        double currentResource = PlayerResources.getAmount(player, resource, maxResource);
+        if (currentResource + 1.0E-6 >= resourceCost) {
             return null;
         }
-        return BLOCKED_WARNING_PREFIX + "mana required=" + resourceCost + ", current=" + currentMana;
+        return BLOCKED_WARNING_PREFIX + resource + " required=" + resourceCost + ", current=" + currentResource;
     }
 
     private static String chargeWarning(SkillExecutionContext context) {
@@ -465,21 +471,33 @@ public final class SkillExecutionExecutor {
     }
 
     private static Identifier resolveDimensionId(SkillExecutionContext context) {
-        String serialized = context.level().dimension().toString();
-        Matcher matcher = IDENTIFIER_PATTERN.matcher(serialized);
-        Identifier parsed = null;
-        while (matcher.find()) {
-            parsed = Identifier.tryParse(matcher.group());
-        }
-        return parsed;
+        return context.level().dimension().identifier();
     }
 
-    private static double resolvedMaxMana(SkillExecutionContext context) {
-        double mana = context.preparedUse().useContext().attackerStats().resolvedValue(CombatStats.MANA);
-        if (!Double.isFinite(mana) || mana <= 0.0) {
+    private static String resolvedResource(SkillExecutionContext context) {
+        return context.preparedUse().resource();
+    }
+
+    private static double resolvedMaxResource(SkillExecutionContext context, String resource) {
+        if (!PlayerResources.supports(resource)) {
             return 0.0;
         }
-        return mana;
+
+        ServerPlayer player = resolvePlayer(context);
+        if (player == null) {
+            return 0.0;
+        }
+
+        double maxResource = PlayerResources.maxAmount(player, resource);
+        if ((!Double.isFinite(maxResource) || maxResource <= 0.0) && context.level().getServer() != null) {
+            maxResource = PlayerResourceService.definition(context.level().getServer(), resource)
+                    .map(definition -> context.preparedUse().useContext().attackerStats().resolvedValue(definition.maxStat()))
+                    .orElse(0.0);
+        }
+        if (!Double.isFinite(maxResource) || maxResource <= 0.0) {
+            return 0.0;
+        }
+        return maxResource;
     }
 
     private static double resolvedResourceCost(SkillExecutionContext context) {

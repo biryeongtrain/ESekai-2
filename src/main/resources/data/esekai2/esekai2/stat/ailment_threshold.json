@@ -1,0 +1,5 @@
+{
+  "translation_key": "stat.esekai2.ailment_threshold",
+  "default_value": 0.0,
+  "min_value": 0.0
+}

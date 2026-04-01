@@ -21,6 +21,7 @@ import java.util.Set;
  * @param skillCondition tag requirement/exclusion gate for this effect
  * @param addedTags additional skill tags supplied by this support effect
  * @param addedConditionalStatModifiers conditional stat modifiers injected by this effect
+ * @param configOverrides support-level config rewrites injected by this effect
  * @param actionParameterOverrides typed field-path rewrites for matched skill actions
  * @param appendedActions additional actions appended by this support effect
  * @param appendedRules additional rules appended to one supported route bucket
@@ -29,6 +30,7 @@ public record SkillSupportEffect(
         SkillTagCondition skillCondition,
         Set<SkillTag> addedTags,
         List<ConditionalStatModifier> addedConditionalStatModifiers,
+        List<SkillConfigOverride> configOverrides,
         List<SkillActionOverride> actionParameterOverrides,
         List<SkillAction> appendedActions,
         List<SkillSupportRuleAppend> appendedRules
@@ -39,6 +41,8 @@ public record SkillSupportEffect(
             SkillTags.CODEC.optionalFieldOf("added_tags", Set.of()).forGetter(SkillSupportEffect::addedTags),
             Codec.list(ConditionalStatModifier.CODEC).optionalFieldOf("added_conditional_stat_modifiers", List.of())
                     .forGetter(SkillSupportEffect::addedConditionalStatModifiers),
+            Codec.list(SkillConfigOverride.CODEC).optionalFieldOf("config_overrides", List.of())
+                    .forGetter(SkillSupportEffect::configOverrides),
             Codec.list(SkillActionOverride.CODEC).optionalFieldOf("action_parameter_overrides", List.of())
                     .forGetter(SkillSupportEffect::actionParameterOverrides),
             Codec.list(SkillAction.CODEC).optionalFieldOf("appended_actions", List.of())
@@ -56,15 +60,38 @@ public record SkillSupportEffect(
         Objects.requireNonNull(skillCondition, "skillCondition");
         Objects.requireNonNull(addedTags, "addedTags");
         Objects.requireNonNull(addedConditionalStatModifiers, "addedConditionalStatModifiers");
+        Objects.requireNonNull(configOverrides, "configOverrides");
         Objects.requireNonNull(actionParameterOverrides, "actionParameterOverrides");
         Objects.requireNonNull(appendedActions, "appendedActions");
         Objects.requireNonNull(appendedRules, "appendedRules");
 
         addedTags = SkillTags.copyOf(addedTags);
         addedConditionalStatModifiers = List.copyOf(addedConditionalStatModifiers);
+        configOverrides = List.copyOf(configOverrides);
         actionParameterOverrides = List.copyOf(actionParameterOverrides);
         appendedActions = List.copyOf(appendedActions);
         appendedRules = List.copyOf(appendedRules);
+    }
+
+    /**
+     * Compatibility constructor retaining the pre-config-override surface.
+     *
+     * @param skillCondition tag requirement/exclusion gate for this effect
+     * @param addedTags additional skill tags supplied by this support effect
+     * @param addedConditionalStatModifiers conditional stat modifiers injected by this effect
+     * @param actionParameterOverrides typed field-path rewrites for matched skill actions
+     * @param appendedActions additional actions appended by this support effect
+     * @param appendedRules additional rules appended to one supported route bucket
+     */
+    public SkillSupportEffect(
+            SkillTagCondition skillCondition,
+            Set<SkillTag> addedTags,
+            List<ConditionalStatModifier> addedConditionalStatModifiers,
+            List<SkillActionOverride> actionParameterOverrides,
+            List<SkillAction> appendedActions,
+            List<SkillSupportRuleAppend> appendedRules
+    ) {
+        this(skillCondition, addedTags, addedConditionalStatModifiers, List.of(), actionParameterOverrides, appendedActions, appendedRules);
     }
 
     /**
@@ -80,6 +107,7 @@ public record SkillSupportEffect(
     private static DataResult<SkillSupportEffect> validate(SkillSupportEffect effect) {
         if (effect.addedTags().isEmpty()
                 && effect.addedConditionalStatModifiers().isEmpty()
+                && effect.configOverrides().isEmpty()
                 && effect.actionParameterOverrides().isEmpty()
                 && effect.appendedActions().isEmpty()
                 && effect.appendedRules().isEmpty()) {

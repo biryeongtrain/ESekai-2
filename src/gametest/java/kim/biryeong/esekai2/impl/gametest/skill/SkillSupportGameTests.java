@@ -15,9 +15,12 @@ import kim.biryeong.esekai2.api.skill.definition.graph.SkillRule;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetSelector;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillTargetType;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedSkillExecutionRoute;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonBlockAction;
@@ -42,6 +45,7 @@ import kim.biryeong.esekai2.api.skill.tag.SkillTagCondition;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.api.stat.modifier.ConditionalStatModifier;
+import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import kim.biryeong.esekai2.impl.skill.registry.SkillCalculationRegistryAccess;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -68,8 +72,13 @@ import java.util.Optional;
 public final class SkillSupportGameTests {
     private static final Identifier FIREBALL_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "fireball");
     private static final Identifier BASIC_STRIKE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "basic_strike");
+    private static final Identifier BATTLE_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "battle_focus");
+    private static final Identifier PREPARED_STATE_PROBE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "prepared_state_probe");
 
     private static final Identifier SUPPORT_COST_BOOST_ID = Identifier.fromNamespaceAndPath("esekai2", "support_cost_boost");
+    private static final Identifier SUPPORT_GUARD_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_guard_focus");
+    private static final Identifier SUPPORT_BROKEN_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_broken_focus");
+    private static final Identifier SUPPORT_PREPARED_STATE_TUNING_ID = Identifier.fromNamespaceAndPath("esekai2", "support_prepared_state_tuning");
     private static final Identifier SUPPORT_DAMAGE_AMP_ID = Identifier.fromNamespaceAndPath("esekai2", "support_fire_damage_amp");
     private static final Identifier SUPPORT_DAMAGE_LATE_AMP_ID = Identifier.fromNamespaceAndPath("esekai2", "support_fire_damage_late_amp");
     private static final Identifier FIREBALL_SUPPORT_BONUS_HIT_ID = Identifier.fromNamespaceAndPath("esekai2", "fireball_support_bonus_hit");
@@ -85,6 +94,9 @@ public final class SkillSupportGameTests {
         Registry<SkillSupportDefinition> registry = supportRegistry(helper);
 
         helper.assertTrue(registry.containsKey(SUPPORT_COST_BOOST_ID), "Support fixture for spell cost adjustment should be present");
+        helper.assertTrue(registry.containsKey(SUPPORT_GUARD_FOCUS_ID), "Support fixture for resource id and cost overrides should be present");
+        helper.assertTrue(registry.containsKey(SUPPORT_BROKEN_FOCUS_ID), "Support fixture for unsupported resource override safety should be present");
+        helper.assertTrue(registry.containsKey(SUPPORT_PREPARED_STATE_TUNING_ID), "Support fixture for prepared-state config overrides should be present");
         helper.assertTrue(registry.containsKey(SUPPORT_DAMAGE_AMP_ID), "Support fixture for damage action modification should be present");
         helper.assertTrue(registry.containsKey(SUPPORT_DAMAGE_LATE_AMP_ID), "Late socket-order override support should be present");
         helper.assertTrue(registry.containsKey(SUPPORT_CAST_ECHO_ID), "On-cast appended rule support should be present");
@@ -173,6 +185,112 @@ public final class SkillSupportGameTests {
 
         helper.assertValueEqual(base.resourceCost(), 12.0, "Base fireball resource cost should be decode baseline");
         helper.assertValueEqual(withSupport.resourceCost(), 16.0, "Supported fireball should include the +4 resource modifier");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that support config_overrides can rewrite both the prepared resource id and prepared resource cost.
+     */
+    @GameTest
+    public void supportConfigOverridesRewritePreparedResourceAndCost(GameTestHelper helper) {
+        PreparedSkillUse base = prepare(helper, battleFocus(helper), newHolder(helper), newHolder(helper), List.of());
+        SkillSupportDefinition support = support(SUPPORT_GUARD_FOCUS_ID, helper);
+        PreparedSkillUse withSupport = Skills.prepareUse(
+                battleFocus(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support))
+        );
+
+        helper.assertValueEqual(base.resource(), "mana", "Base battle focus should keep the default mana resource");
+        helper.assertValueEqual(base.resourceCost(), 8.0, "Base battle focus resource cost should remain the decode baseline");
+        helper.assertValueEqual(withSupport.resource(), "guard", "Support config_overrides should replace the prepared resource id");
+        helper.assertValueEqual(withSupport.resourceCost(), 3.0, "Support config_overrides should replace the prepared resource cost");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that prepared-state value expressions reuse resolved prepared values across actions, predicates, selectors, and tick conditions.
+     */
+    @GameTest
+    public void preparedStateExpressionsReuseResolvedPreparedValues(GameTestHelper helper) {
+        PreparedSkillUse prepared = prepare(helper, preparedStateProbe(helper), newHolder(helper), newHolder(helper), List.of());
+
+        PreparedHealAction heal = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedHealAction)
+                .map(PreparedHealAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared state probe should expose one prepared heal action"));
+        PreparedResourceDeltaAction resourceDelta = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedResourceDeltaAction)
+                .map(PreparedResourceDeltaAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared state probe should expose one prepared resource-delta action"));
+        PreparedSkillExecutionRoute tickRoute = prepared.component("default_entity_name").tickRoutes().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared state probe should expose one tick route"));
+        SkillValueExpression radius = tickRoute.targets().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Prepared tick route should expose one selector"))
+                .radius();
+
+        helper.assertValueEqual(prepared.resourceCost(), 9.0, "Prepared state probe should keep its decoded resource cost");
+        helper.assertValueEqual(prepared.useTimeTicks(), 13, "Prepared state probe should keep its decoded use time");
+        helper.assertValueEqual(prepared.cooldownTicks(), 7, "Prepared state probe should keep its decoded cooldown");
+        helper.assertValueEqual(heal.amount(), 9.0, "resource_cost expressions should resolve against the prepared resource cost");
+        helper.assertValueEqual(resourceDelta.amount(), 13.0, "use_time_ticks expressions should resolve against the prepared use time");
+        helper.assertValueEqual(heal.enPreds().getFirst().amount().resolve(prepared.useContext()), 2.0,
+                "max_charges expressions should resolve inside action predicates");
+        helper.assertValueEqual(resourceDelta.enPreds().getFirst().amount().resolve(prepared.useContext()), 9.0,
+                "resource_cost expressions should resolve inside action predicates");
+        helper.assertValueEqual(radius.resolve(prepared.useContext()), 3.0,
+                "times_to_cast expressions should resolve inside selector radius payloads");
+        helper.assertValueEqual(tickRoute.tickIntervalTicks(), 7,
+                "cooldown_ticks expressions should resolve inside x_ticks_condition intervals");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that support-overridden config values are visible through prepared-state value expressions on the direct prepare path.
+     */
+    @GameTest
+    public void supportPreparedStateExpressionsObserveMergedConfigOverrides(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                preparedStateProbe(helper),
+                skillUseContext(helper, newHolder(helper), newHolder(helper), List.of(), 0.0, 0.0)
+                        .withLinkedSupports(List.of(support(SUPPORT_PREPARED_STATE_TUNING_ID, helper)))
+        );
+
+        PreparedHealAction heal = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedHealAction)
+                .map(PreparedHealAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Supported prepared state probe should expose one prepared heal action"));
+        PreparedResourceDeltaAction resourceDelta = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedResourceDeltaAction)
+                .map(PreparedResourceDeltaAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Supported prepared state probe should expose one prepared resource-delta action"));
+        PreparedSkillExecutionRoute tickRoute = prepared.component("default_entity_name").tickRoutes().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Supported prepared state probe should expose one tick route"));
+        SkillValueExpression radius = tickRoute.targets().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Supported prepared tick route should expose one selector"))
+                .radius();
+
+        helper.assertValueEqual(prepared.resourceCost(), 4.0, "Support override should replace the prepared resource cost");
+        helper.assertValueEqual(prepared.useTimeTicks(), 6, "Support override should replace the prepared use time");
+        helper.assertValueEqual(prepared.cooldownTicks(), 11, "Support override should replace the prepared cooldown");
+        helper.assertValueEqual(heal.amount(), 4.0, "Prepared heal amount should observe the support-overridden resource cost");
+        helper.assertValueEqual(resourceDelta.amount(), 6.0, "Prepared resource-delta amount should observe the support-overridden use time");
+        helper.assertValueEqual(heal.enPreds().getFirst().amount().resolve(prepared.useContext()), 4.0,
+                "Prepared action predicates should observe the support-overridden max charges");
+        helper.assertValueEqual(resourceDelta.enPreds().getFirst().amount().resolve(prepared.useContext()), 4.0,
+                "Prepared action predicates should observe the support-overridden resource cost");
+        helper.assertValueEqual(radius.resolve(prepared.useContext()), 5.0,
+                "Prepared selector radius should observe the support-overridden times_to_cast");
+        helper.assertValueEqual(tickRoute.tickIntervalTicks(), 11,
+                "Prepared tick route should observe the support-overridden cooldown");
         helper.succeed();
     }
 
@@ -471,6 +589,16 @@ public final class SkillSupportGameTests {
     private static SkillDefinition basicStrike(GameTestHelper helper) {
         return skillRegistry(helper).getOptional(BASIC_STRIKE_SKILL_ID)
                 .orElseThrow(() -> helper.assertionException("Basic strike should decode successfully"));
+    }
+
+    private static SkillDefinition battleFocus(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(BATTLE_FOCUS_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Battle focus should decode successfully"));
+    }
+
+    private static SkillDefinition preparedStateProbe(GameTestHelper helper) {
+        return skillRegistry(helper).getOptional(PREPARED_STATE_PROBE_SKILL_ID)
+                .orElseThrow(() -> helper.assertionException("Prepared state probe should decode successfully"));
     }
 
     private static Registry<SkillDefinition> skillRegistry(GameTestHelper helper) {

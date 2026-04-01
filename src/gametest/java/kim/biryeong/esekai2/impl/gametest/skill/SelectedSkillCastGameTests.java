@@ -8,6 +8,7 @@ import kim.biryeong.esekai2.api.item.socket.SocketedSkillRef;
 import kim.biryeong.esekai2.api.item.socket.SocketedSkills;
 import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.player.skill.PlayerActiveSkills;
+import kim.biryeong.esekai2.api.player.stat.PlayerCombatStats;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillBurstState;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillBursts;
 import kim.biryeong.esekai2.api.player.skill.PlayerSkillCharges;
@@ -15,20 +16,28 @@ import kim.biryeong.esekai2.api.player.skill.PlayerSkillCooldowns;
 import kim.biryeong.esekai2.api.player.skill.SelectedActiveSkillRef;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationLookup;
+import kim.biryeong.esekai2.api.skill.definition.graph.SkillPredicate;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedProjectileAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonBlockAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
 import kim.biryeong.esekai2.api.skill.execution.SelectedSkillCastResult;
 import kim.biryeong.esekai2.api.skill.execution.SelectedSkillUseResult;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
 import kim.biryeong.esekai2.api.skill.execution.SkillUseContext;
+import kim.biryeong.esekai2.api.skill.execution.SkillUseContexts;
 import kim.biryeong.esekai2.api.skill.execution.Skills;
+import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.stat.combat.CombatStats;
+import kim.biryeong.esekai2.api.stat.definition.StatDefinition;
+import kim.biryeong.esekai2.api.stat.definition.StatRegistries;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
 import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.api.stat.modifier.ConditionalStatModifier;
@@ -37,6 +46,7 @@ import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -61,17 +71,25 @@ public final class SelectedSkillCastGameTests {
     private static final Identifier CHARGED_FOCUS_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_focus");
     private static final Identifier CHARGED_SURGE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "charged_surge");
     private static final Identifier OVERWORLD_BARRIER_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "overworld_barrier");
+    private static final Identifier PREPARED_STATE_PROBE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "prepared_state_probe");
     private static final Identifier SUPPORT_CAST_ECHO_ID = Identifier.fromNamespaceAndPath("esekai2", "support_cast_echo");
     private static final Identifier SUPPORT_COST_BOOST_ID = Identifier.fromNamespaceAndPath("esekai2", "support_cost_boost");
+    private static final Identifier SUPPORT_GUARD_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_guard_focus");
+    private static final Identifier SUPPORT_BROKEN_FOCUS_ID = Identifier.fromNamespaceAndPath("esekai2", "support_broken_focus");
+    private static final Identifier SUPPORT_PREPARED_STATE_TUNING_ID = Identifier.fromNamespaceAndPath("esekai2", "support_prepared_state_tuning");
     private static final Identifier MISSING_SUPPORT_ID = Identifier.fromNamespaceAndPath("esekai2", "missing_support");
     private static final Identifier MISSING_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "missing_skill");
+    private static final ResourceKey<StatDefinition> GUARD_STAT = ResourceKey.create(
+            StatRegistries.STAT,
+            Identifier.fromNamespaceAndPath("esekai2", "guard")
+    );
 
     /**
      * Verifies that selected active skill state can be stored, queried, and cleared for one server player.
      */
     @GameTest
     public void playerSelectedActiveSkillStateCanBeStoredAndCleared(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         SelectedActiveSkillRef selected = new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, FIREBALL_SKILL_ID);
 
         PlayerActiveSkills.select(player, selected);
@@ -87,7 +105,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void prepareSelectedUseResolvesDuplicateSkillIdsByEquipmentSlot(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), fireballStack(List.of(supportRef(1, SUPPORT_COST_BOOST_ID))));
         player.setItemSlot(SocketedEquipmentSlot.OFF_HAND.equipmentSlot(), fireballStack(List.of()));
 
@@ -109,7 +127,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void prepareSelectedUseOnlyInjectsSupportsFromActiveSkillLinkGroup(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         ItemStack stack = new ItemStack(Items.BLAZE_ROD);
         SocketedSkills.set(stack, new SocketedSkillItemState(
                 Optional.of(FIREBALL_SKILL_ID),
@@ -139,7 +157,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void prepareSelectedUseWarnsAndContinuesWhenLinkedSupportIsMissing(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), fireballStack(List.of(supportRef(1, MISSING_SUPPORT_ID))));
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, FIREBALL_SKILL_ID));
 
@@ -157,7 +175,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void prepareSelectedUseFailsSafelyForMissingOrStaleSelection(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
 
         SelectedSkillUseResult noSelection = Skills.prepareSelectedUse(player, skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.99));
         helper.assertTrue(!noSelection.success(), "Preparing without a selected active skill should fail safely");
@@ -184,7 +202,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillExecutesServerCastPath(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), basicStrikeStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BASIC_STRIKE_SKILL_ID));
         LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
@@ -207,7 +225,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillIncludesSupportAppendedOnCastRules(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 fireballStack(List.of(supportRef(1, SUPPORT_CAST_ECHO_ID)))
@@ -235,7 +253,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillSpendsManaAndStartsCooldown(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), battleFocusStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
 
@@ -262,7 +280,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillFailsSafelyWhenManaIsInsufficient(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), fireballStack(List.of()));
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, FIREBALL_SKILL_ID));
 
@@ -289,7 +307,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillFailsSafelyInDisabledDimension(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), overworldBarrierStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, OVERWORLD_BARRIER_SKILL_ID));
 
@@ -305,9 +323,228 @@ public final class SelectedSkillCastGameTests {
 
         helper.assertTrue(result.success(), "Selected cast should still return a resolved execution result when the skill is disabled in the current dimension");
         helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 0, "Disabled-dimension selected casts should not execute runtime actions");
-        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("dimension")),
-                "Disabled-dimension selected casts should surface a warning");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("minecraft:overworld")),
+                "Disabled-dimension selected casts should surface the resolved dimension id in the warning");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0, "Disabled-dimension selected casts should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected-skill preparation preserves support-overridden resource id and resource cost.
+     */
+    @GameTest
+    public void prepareSelectedUseAppliesSupportConfigOverridesForResourceAndCost(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                battleFocusStack(List.of(supportRef(1, SUPPORT_GUARD_FOCUS_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(player, skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0));
+
+        helper.assertTrue(result.success(), "Selected battle focus should prepare successfully with config override support linked");
+        helper.assertValueEqual(result.preparedUse().orElseThrow().resource(), "guard",
+                "Selected preparation should preserve the support-overridden resource id");
+        helper.assertValueEqual(result.preparedUse().orElseThrow().resourceCost(), 3.0,
+                "Selected preparation should preserve the support-overridden resource cost");
+        helper.assertValueEqual(SkillValueExpression.resourceCost().resolve(result.preparedUse().orElseThrow().useContext()), 3.0,
+                "Prepared resource_cost expressions should observe the support-overridden selected prepared resource cost");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected preparation exposes resolved prepared-state values for charge, burst, cooldown, and use-time reuse.
+     */
+    @GameTest
+    public void prepareSelectedUseExposesPreparedStateValuesForCurrentSkill(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+
+        player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedFocusStack());
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_FOCUS_SKILL_ID));
+        SelectedSkillUseResult charged = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0)
+        );
+
+        helper.assertTrue(charged.success(), "Selected charged focus should prepare successfully for prepared-state assertions");
+        helper.assertValueEqual(SkillValueExpression.resourceCost().resolve(charged.preparedUse().orElseThrow().useContext()),
+                charged.preparedUse().orElseThrow().resourceCost(),
+                "Selected prepared resource_cost should resolve from the prepared-state lookup");
+        helper.assertValueEqual(SkillValueExpression.cooldownTicks().resolve(charged.preparedUse().orElseThrow().useContext()),
+                (double) charged.preparedUse().orElseThrow().cooldownTicks(),
+                "Selected prepared cooldown_ticks should resolve from the prepared-state lookup");
+        helper.assertValueEqual(SkillValueExpression.maxCharges().resolve(charged.preparedUse().orElseThrow().useContext()), 2.0,
+                "Selected prepared max_charges should expose the configured charge cap");
+
+        player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), burstFocusStack());
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BURST_FOCUS_SKILL_ID));
+        SelectedSkillUseResult burst = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0)
+        );
+
+        helper.assertTrue(burst.success(), "Selected burst focus should prepare successfully for prepared-state assertions");
+        helper.assertValueEqual(SkillValueExpression.useTimeTicks().resolve(burst.preparedUse().orElseThrow().useContext()),
+                (double) burst.preparedUse().orElseThrow().useTimeTicks(),
+                "Selected prepared use_time_ticks should resolve from the prepared-state lookup");
+        helper.assertValueEqual(SkillValueExpression.timesToCast().resolve(burst.preparedUse().orElseThrow().useContext()), 2.0,
+                "Selected prepared times_to_cast should expose the configured burst cast count");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected preparation exposes support-overridden prepared-state values across actions, predicates, selectors, and tick routes.
+     */
+    @GameTest
+    public void prepareSelectedUseExposesSupportOverriddenPreparedStateGraphValues(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                preparedStateProbeStack(List.of(supportRef(1, SUPPORT_PREPARED_STATE_TUNING_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, PREPARED_STATE_PROBE_SKILL_ID));
+
+        SelectedSkillUseResult result = Skills.prepareSelectedUse(
+                player,
+                skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0)
+        );
+
+        helper.assertTrue(result.success(), "Selected prepared-state probe should prepare successfully with tuning support linked");
+        PreparedSkillUse prepared = result.preparedUse().orElseThrow();
+        PreparedHealAction heal = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedHealAction)
+                .map(PreparedHealAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected prepared-state probe should expose one prepared heal action"));
+        PreparedResourceDeltaAction resourceDelta = prepared.onCastActions().stream()
+                .filter(action -> action instanceof PreparedResourceDeltaAction)
+                .map(PreparedResourceDeltaAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected prepared-state probe should expose one prepared resource-delta action"));
+        var tickRoute = prepared.component("default_entity_name").tickRoutes().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected prepared-state probe should expose one tick route"));
+        SkillValueExpression radius = tickRoute.targets().stream()
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Selected prepared-state tick route should expose one selector"))
+                .radius();
+
+        helper.assertValueEqual(prepared.resourceCost(), 4.0, "Selected preparation should preserve the support-overridden resource cost");
+        helper.assertValueEqual(prepared.useTimeTicks(), 6, "Selected preparation should preserve the support-overridden use time");
+        helper.assertValueEqual(prepared.cooldownTicks(), 11, "Selected preparation should preserve the support-overridden cooldown");
+        helper.assertValueEqual(heal.amount(), 4.0, "Selected prepared heal amount should observe the support-overridden resource cost");
+        helper.assertValueEqual(resourceDelta.amount(), 6.0, "Selected prepared resource-delta amount should observe the support-overridden use time");
+        helper.assertValueEqual(heal.enPreds().getFirst().amount().resolve(prepared.useContext()), 4.0,
+                "Selected prepared action predicates should observe the support-overridden max charges");
+        helper.assertValueEqual(resourceDelta.enPreds().getFirst().amount().resolve(prepared.useContext()), 4.0,
+                "Selected prepared action predicates should observe the support-overridden resource cost");
+        helper.assertValueEqual(radius.resolve(prepared.useContext()), 5.0,
+                "Selected prepared selector radius should observe the support-overridden times_to_cast");
+        helper.assertValueEqual(tickRoute.tickIntervalTicks(), 11,
+                "Selected prepared tick route should observe the support-overridden cooldown");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected casts spend the support-overridden guard resource instead of mana.
+     */
+    @GameTest
+    public void castSelectedSkillSpendsSupportOverriddenGuardResourceInsteadOfMana(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                battleFocusStack(List.of(supportRef(1, SUPPORT_GUARD_FOCUS_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
+
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PlayerCombatStats.get(player).setBaseValue(GUARD_STAT, 10.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+        PlayerResources.set(player, "guard", 5.0);
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, attacker, newHolder(helper), 0.0, 0.0),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected guard-backed cast should resolve successfully");
+        helper.assertTrue(result.executionResult().orElseThrow().executedActions() > 0,
+                "Selected guard-backed cast should execute runtime actions when enough guard is available");
+        helper.assertValueEqual(PlayerResources.getAmount(player, "guard", 10.0), 2.0,
+                "Successful selected guard-backed casts should spend guard");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0,
+                "Selected guard-backed casts should not spend mana");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that selected casts block registered support-overridden resources when the player has no max pool for that resource.
+     */
+    @GameTest
+    public void castSelectedSkillBlocksSupportOverriddenResourceWhenRegisteredPoolIsZero(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                battleFocusStack(List.of(supportRef(1, SUPPORT_GUARD_FOCUS_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
+
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, attacker, newHolder(helper), 0.0, 0.0),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected casts should still return a resolved result when a registered resource pool is unavailable");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 0,
+                "Zero-pool registered resources should block selected runtime execution");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("guard required=3.0")),
+                "Zero-pool registered resources should surface a guard resource warning on selected casts");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0,
+                "Zero-pool registered resources should not spend mana on selected casts");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that unsupported support-overridden resources fail safely on selected casts.
+     */
+    @GameTest
+    public void castSelectedSkillBlocksUnsupportedSupportOverriddenResource(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(
+                SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
+                battleFocusStack(List.of(supportRef(1, SUPPORT_BROKEN_FOCUS_ID)))
+        );
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
+
+        StatHolder attacker = newHolder(helper);
+        attacker.setBaseValue(CombatStats.MANA, 20.0);
+        PlayerCombatStats.get(player).setBaseValue(GUARD_STAT, 10.0);
+        PlayerResources.setMana(player, 20.0, 20.0);
+        PlayerResources.set(player, "guard", 5.0);
+
+        SelectedSkillCastResult result = Skills.castSelectedSkill(
+                player,
+                skillUseContext(helper, attacker, newHolder(helper), 0.0, 0.0),
+                Optional.empty()
+        );
+
+        helper.assertTrue(result.success(), "Selected casts should still return a resolved result for unsupported overridden resources");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 0,
+                "Unsupported overridden resources should block selected runtime execution");
+        helper.assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("unsupported resource=life")),
+                "Unsupported overridden resources should surface a clear selected-cast runtime warning");
+        helper.assertValueEqual(PlayerResources.getAmount(player, "guard", 10.0), 5.0,
+                "Unsupported overridden resources should not spend guard");
+        helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 20.0,
+                "Unsupported overridden resources should not spend mana");
         helper.succeed();
     }
 
@@ -316,7 +553,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillBlocksWhenPlayerCooldownIsActive(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), battleFocusStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BATTLE_FOCUS_SKILL_ID));
 
@@ -344,7 +581,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillSpendsStoredChargeOnSuccessfulCast(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedSurgeStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_SURGE_SKILL_ID));
 
@@ -366,7 +603,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillBlocksAtZeroStoredCharges(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedSurgeStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_SURGE_SKILL_ID));
 
@@ -397,7 +634,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillRegeneratesStoredChargeAfterTimeAdvance(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedSurgeStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_SURGE_SKILL_ID));
 
@@ -428,11 +665,11 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillKeepsRemainingChargeAcrossCooldownExpiry(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedFocusStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_FOCUS_SKILL_ID));
 
-        SkillUseContext context = skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0);
+        SkillUseContext context = SkillUseContexts.forPlayer(player, 0.0, 0.0);
         SelectedSkillCastResult first = Skills.castSelectedSkill(player, context, Optional.empty());
         SelectedSkillCastResult blockedByCooldown = Skills.castSelectedSkill(player, context, Optional.empty());
 
@@ -456,11 +693,56 @@ public final class SelectedSkillCastGameTests {
     }
 
     /**
+     * Verifies that selected-skill preparation reuses current-skill cooldown and charge graph values and predicates.
+     */
+    @GameTest
+    public void runtimeStateValueAndPredicateReuseWorksForSelectedSkillContext(GameTestHelper helper) {
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
+        player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedFocusStack());
+        PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_FOCUS_SKILL_ID));
+
+        SkillUseContext context = SkillUseContexts.forPlayer(player, 0.0, 0.0);
+        SelectedSkillUseResult beforeCast = Skills.prepareSelectedUse(player, context);
+        helper.assertTrue(beforeCast.success(), "Selected charged focus should prepare successfully before runtime-state assertions");
+        var preparedBeforeCast = beforeCast.preparedUse().orElseThrow();
+        SkillExecutionContext beforeCastExecution = SkillExecutionContext.forCast(preparedBeforeCast, helper.getLevel(), player, Optional.empty());
+
+        helper.assertValueEqual(SkillValueExpression.chargesAvailable().resolve(preparedBeforeCast.useContext()), 2.0,
+                "Selected prepare should expose the initial available charge count for the active skill");
+        helper.assertTrue(SkillPredicate.hasCharges().matches(beforeCastExecution),
+                "Selected prepare should report available charges before the first cast");
+        helper.assertValueEqual(SkillValueExpression.cooldownRemaining().resolve(preparedBeforeCast.useContext()), 0.0,
+                "Selected prepare should expose zero cooldown before the first cast");
+        helper.assertTrue(SkillPredicate.cooldownReady().matches(beforeCastExecution),
+                "Selected prepare should report cooldown-ready before the first cast");
+
+        SelectedSkillCastResult cast = Skills.castSelectedSkill(player, context, Optional.empty());
+        helper.assertTrue(cast.success(), "Selected charged focus cast should resolve successfully");
+        helper.assertTrue(cast.executionResult().orElseThrow().executedActions() > 0,
+                "Selected charged focus cast should execute at least one action");
+
+        SelectedSkillUseResult afterCast = Skills.prepareSelectedUse(player, context);
+        helper.assertTrue(afterCast.success(), "Selected charged focus should prepare successfully after one cast");
+        var preparedAfterCast = afterCast.preparedUse().orElseThrow();
+        SkillExecutionContext afterCastExecution = SkillExecutionContext.forCast(preparedAfterCast, helper.getLevel(), player, Optional.empty());
+
+        helper.assertValueEqual(SkillValueExpression.chargesAvailable().resolve(preparedAfterCast.useContext()), 1.0,
+                "Selected prepare should expose one remaining charge after the first cast");
+        helper.assertTrue(SkillPredicate.hasCharges().matches(afterCastExecution),
+                "Selected prepare should still report one remaining charge after the first cast");
+        helper.assertTrue(SkillValueExpression.cooldownRemaining().resolve(afterCastExecution) > 0.0,
+                "Selected prepare should expose a positive cooldown after the first cast");
+        helper.assertFalse(SkillPredicate.cooldownReady().matches(afterCastExecution),
+                "Selected prepare should report not-ready while the selected skill cooldown is active");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that mana-blocked selected charged casts leave stored charges unchanged.
      */
     @GameTest
     public void castSelectedSkillDoesNotSpendChargeWhenManaBlocksRuntime(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), chargedFocusStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, CHARGED_FOCUS_SKILL_ID));
 
@@ -492,7 +774,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillUsesBurstWindowForTimesToCastTwo(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), burstStrikeStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BURST_STRIKE_SKILL_ID));
         SkillUseContext context = skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0);
@@ -540,7 +822,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillResetsBurstAfterDifferentSkillSucceeds(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), burstStrikeStack());
         player.setItemSlot(SocketedEquipmentSlot.OFF_HAND.equipmentSlot(), battleFocusStack());
         SkillUseContext context = skillUseContext(helper, newHolder(helper), newHolder(helper), 0.0, 0.0);
@@ -574,7 +856,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillKeepsBurstStateWhenCooldownBlocksFollowUp(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), burstReserveStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BURST_RESERVE_SKILL_ID));
 
@@ -627,7 +909,7 @@ public final class SelectedSkillCastGameTests {
      */
     @GameTest
     public void castSelectedSkillKeepsBurstStateWhenManaBlocksFollowUp(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(), burstFocusStack());
         PlayerActiveSkills.select(player, new SelectedActiveSkillRef(SocketedEquipmentSlot.MAIN_HAND, BURST_FOCUS_SKILL_ID));
 
@@ -721,12 +1003,33 @@ public final class SelectedSkillCastGameTests {
     }
 
     private static ItemStack battleFocusStack() {
+        return battleFocusStack(List.of());
+    }
+
+    private static ItemStack battleFocusStack(List<SocketedSkillRef> extraSupports) {
         ItemStack stack = new ItemStack(Items.BLAZE_ROD);
+        List<SocketedSkillRef> socketRefs = new java.util.ArrayList<>();
+        socketRefs.add(new SocketedSkillRef(0, SocketSlotType.SKILL, BATTLE_FOCUS_SKILL_ID));
+        socketRefs.addAll(extraSupports);
         SocketedSkills.set(stack, new SocketedSkillItemState(
                 Optional.of(BATTLE_FOCUS_SKILL_ID),
-                1,
-                List.of(new SocketLinkGroup(0, List.of(0))),
-                List.of(new SocketedSkillRef(0, SocketSlotType.SKILL, BATTLE_FOCUS_SKILL_ID))
+                Math.max(1, socketRefs.size()),
+                List.of(new SocketLinkGroup(0, socketRefs.stream().map(SocketedSkillRef::socketIndex).toList())),
+                List.copyOf(socketRefs)
+        ));
+        return stack;
+    }
+
+    private static ItemStack preparedStateProbeStack(List<SocketedSkillRef> extraSupports) {
+        ItemStack stack = new ItemStack(Items.LAPIS_LAZULI);
+        List<SocketedSkillRef> socketRefs = new java.util.ArrayList<>();
+        socketRefs.add(new SocketedSkillRef(0, SocketSlotType.SKILL, PREPARED_STATE_PROBE_SKILL_ID));
+        socketRefs.addAll(extraSupports);
+        SocketedSkills.set(stack, new SocketedSkillItemState(
+                Optional.of(PREPARED_STATE_PROBE_SKILL_ID),
+                Math.max(1, socketRefs.size()),
+                List.of(new SocketLinkGroup(0, socketRefs.stream().map(SocketedSkillRef::socketIndex).toList())),
+                List.copyOf(socketRefs)
         ));
         return stack;
     }

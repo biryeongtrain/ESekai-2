@@ -4,13 +4,11 @@ import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeCalculation;
 import kim.biryeong.esekai2.api.damage.calculation.DamageOverTimeResult;
-import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyDotAction;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
-import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
-import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
+import kim.biryeong.esekai2.impl.stat.runtime.LivingEntityCombatStatResolver;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
@@ -150,10 +148,10 @@ public final class SkillDotRuntimeManager {
             LivingEntity target,
             DamageOverTimeCalculation calculation
     ) {
-        StatHolder base = MonsterStats.resolveBaseHolder(target)
+        StatHolder base = LivingEntityCombatStatResolver.resolve(target)
                 .orElse(calculation.defenderStats() != null
                         ? calculation.defenderStats()
-                        : StatHolders.create(StatRegistryAccess.statRegistry(level.getServer())));
+                        : LivingEntityCombatStatResolver.empty(level.getServer()));
         return AilmentRuntime.resolveDefenderStats(level, target, base);
     }
 

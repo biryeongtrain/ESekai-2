@@ -3,20 +3,28 @@ package kim.biryeong.esekai2.api.level;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import kim.biryeong.esekai2.api.stat.modifier.StatModifier;
+
+import java.util.List;
+import java.util.Objects;
 
 /**
- * One level progression row describing the experience required to advance from this level.
+ * One level progression row describing the experience required to advance from this level and any
+ * stat rewards granted when the player reaches it.
  *
  * @param level level represented by this row
  * @param experienceToNextLevel experience required to reach the next level from this row
+ * @param grantedModifiers stat modifiers granted on reaching this level
  */
 public record LevelProgressionEntry(
         int level,
-        long experienceToNextLevel
+        long experienceToNextLevel,
+        List<StatModifier> grantedModifiers
 ) {
     private static final Codec<LevelProgressionEntry> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.fieldOf("level").forGetter(LevelProgressionEntry::level),
-            Codec.LONG.fieldOf("experience_to_next_level").forGetter(LevelProgressionEntry::experienceToNextLevel)
+            Codec.LONG.fieldOf("experience_to_next_level").forGetter(LevelProgressionEntry::experienceToNextLevel),
+            Codec.list(StatModifier.CODEC).optionalFieldOf("granted_modifiers", List.of()).forGetter(LevelProgressionEntry::grantedModifiers)
     ).apply(instance, LevelProgressionEntry::new));
 
     /**
@@ -26,6 +34,11 @@ public record LevelProgressionEntry(
 
     public LevelProgressionEntry {
         LevelRules.requireValidLevel(level, "level");
+        Objects.requireNonNull(grantedModifiers, "grantedModifiers");
+        grantedModifiers = List.copyOf(grantedModifiers);
+        for (StatModifier modifier : grantedModifiers) {
+            Objects.requireNonNull(modifier, "grantedModifiers entry");
+        }
         if (experienceToNextLevel < 0L) {
             throw new IllegalArgumentException("experienceToNextLevel must be greater than or equal to 0");
         }

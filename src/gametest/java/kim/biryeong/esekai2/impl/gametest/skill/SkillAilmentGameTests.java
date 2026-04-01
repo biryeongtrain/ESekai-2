@@ -93,6 +93,7 @@ public final class SkillAilmentGameTests {
     private static final Identifier CHILLING_EMBER_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "chilling_ember_inline");
     private static final Identifier OVERWRITING_CHILLING_EMBER_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "overwriting_chilling_ember_inline");
     private static final Identifier GLACIAL_CLEAVE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "glacial_cleave_inline");
+    private static final Identifier ARCTIC_AVALANCHE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "arctic_avalanche_inline");
     private static final Identifier GLACIAL_PRISON_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "glacial_prison_inline");
     private static final Identifier NEGATIVE_PURGE_SKILL_ID = Identifier.fromNamespaceAndPath("esekai2", "negative_purge_inline");
 
@@ -433,6 +434,35 @@ public final class SkillAilmentGameTests {
     }
 
     /**
+     * Verifies that chill potency is capped at 30% and that the stored cap drives the live movement slow.
+     */
+    @GameTest
+    public void chillPotencyCapsAtThirtyPercentAndMovementSlowUsesCap(GameTestHelper helper) {
+        Player caster = helper.makeMockPlayer(GameType.CREATIVE);
+        LivingEntity target = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(3.0, 2.0, 3.0));
+        double baselineMovementSpeed = target.getAttributeValue(Attributes.MOVEMENT_SPEED);
+        PreparedSkillUse prepared = Skills.prepareUse(
+                arcticAvalanche(),
+                skillUseContext(helper, newHolder(helper), MonsterStats.resolveBaseHolder(target).orElse(newHolder(helper)), 0.0, 0.99)
+        );
+
+        Skills.executeOnCast(SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(target)));
+
+        AilmentPayload chillPayload = ailmentPayload(helper, target, AilmentType.CHILL);
+        MobEffectInstance chillEffect = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.CHILL)));
+        helper.assertValueEqual(chillPayload.potency(), 30.0, "High-damage chill should clamp its stored potency at the 30 percent cap");
+        helper.assertTrue(chillPayload.potency() <= 30.0, "Chill potency should never exceed the control ailment cap");
+        helper.assertTrue(chillEffect != null, "Capped chill should still be represented by a MobEffect identity");
+        helper.assertValueEqual(chillEffect.getAmplifier(), 29, "Capped 30 percent chill should encode as amplifier 29");
+        helper.assertValueEqual(
+                target.getAttributeValue(Attributes.MOVEMENT_SPEED),
+                baselineMovementSpeed * 0.70,
+                "Capped chill should reduce movement speed by exactly 30 percent"
+        );
+        helper.succeed();
+    }
+
+    /**
      * Verifies that chill keeps the stronger payload and only updates when a stronger reapplication arrives.
      */
     @GameTest
@@ -591,7 +621,7 @@ public final class SkillAilmentGameTests {
      */
     @GameTest
     public void prepareSelectedUseAppliesAilmentSupportOverrides(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         player.setItemSlot(
                 SocketedEquipmentSlot.MAIN_HAND.equipmentSlot(),
                 kindlingStrikeStack(List.of(
@@ -777,6 +807,10 @@ public final class SkillAilmentGameTests {
 
     private static SkillDefinition glacialCleave() {
         return ailmentSkill(GLACIAL_CLEAVE_SKILL_ID, AilmentType.CHILL, 20.0, 10, 100.0, "minecraft:block.glass.hit");
+    }
+
+    private static SkillDefinition arcticAvalanche() {
+        return ailmentSkill(ARCTIC_AVALANCHE_SKILL_ID, AilmentType.CHILL, 200.0, 10, 100.0, "minecraft:block.glass.hit");
     }
 
     private static SkillDefinition glacialPrison() {

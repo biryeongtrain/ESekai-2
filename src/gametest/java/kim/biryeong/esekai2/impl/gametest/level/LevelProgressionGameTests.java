@@ -7,6 +7,8 @@ import kim.biryeong.esekai2.api.level.LevelRegistries;
 import kim.biryeong.esekai2.api.level.LevelRules;
 import kim.biryeong.esekai2.api.player.level.PlayerLevelState;
 import kim.biryeong.esekai2.api.player.level.PlayerLevels;
+import kim.biryeong.esekai2.api.stat.combat.CombatStats;
+import kim.biryeong.esekai2.api.stat.modifier.StatModifier;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.Registry;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -66,6 +68,21 @@ public final class LevelProgressionGameTests {
     }
 
     /**
+     * Verifies that granted_modifiers columns decode into per-level reward lists exposed by the public API.
+     */
+    @GameTest
+    public void playerProgressionExposesGrantedModifiers(GameTestHelper helper) {
+        LevelProgressionDefinition definition = progressionRegistry(helper).getOptional(DEFAULT_PROGRESSION_ID)
+                .orElseThrow(() -> helper.assertionException("Default player progression should decode successfully"));
+
+        helper.assertValueEqual(definition.grantedModifiers(1), java.util.List.of(), "Level one should not grant any configured modifiers");
+        assertSingleReward(helper, definition.grantedModifiers(2), CombatStats.LIFE, 5.0, "Level two should grant the configured life reward");
+        assertSingleReward(helper, definition.grantedModifiers(3), CombatStats.MANA, 10.0, "Level three should grant the configured mana reward");
+        assertSingleReward(helper, definition.grantedModifiers(4), CombatStats.ACCURACY, 7.0, "Level four should grant the configured accuracy reward");
+        helper.succeed();
+    }
+
+    /**
      * Verifies that progression definitions reject missing level rows.
      */
     @GameTest
@@ -116,7 +133,7 @@ public final class LevelProgressionGameTests {
      */
     @GameTest
     public void addExperiencePromotesOneLevel(GameTestHelper helper) {
-        var player = helper.makeMockServerPlayerInLevel();
+        var player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         PlayerLevels.setExperience(player, 0L);
         PlayerLevelState state = PlayerLevels.addExperience(player, 100L);
 
@@ -131,7 +148,7 @@ public final class LevelProgressionGameTests {
      */
     @GameTest
     public void setExperienceCanSkipMultipleLevels(GameTestHelper helper) {
-        var player = helper.makeMockServerPlayerInLevel();
+        var player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         PlayerLevelState state = PlayerLevels.setExperience(player, 1_500L);
 
         helper.assertValueEqual(state.level(), 6, "One thousand five hundred total experience should resolve to level six with this default progression");
@@ -144,7 +161,7 @@ public final class LevelProgressionGameTests {
      */
     @GameTest
     public void totalExperienceClampsAtMaximumLevel(GameTestHelper helper) {
-        var player = helper.makeMockServerPlayerInLevel();
+        var player = kim.biryeong.esekai2.impl.gametest.support.GameTestPlayers.create(helper);
         PlayerLevelState state = PlayerLevels.setExperience(player, Long.MAX_VALUE / 4L);
 
         helper.assertValueEqual(state.level(), 100, "Very large total experience should clamp the player level at one hundred");
@@ -155,5 +172,18 @@ public final class LevelProgressionGameTests {
 
     private static Registry<LevelProgressionDefinition> progressionRegistry(GameTestHelper helper) {
         return helper.getLevel().getServer().registryAccess().lookupOrThrow(LevelRegistries.PLAYER_PROGRESSION);
+    }
+
+    private static void assertSingleReward(
+            GameTestHelper helper,
+            java.util.List<StatModifier> modifiers,
+            net.minecraft.resources.ResourceKey<kim.biryeong.esekai2.api.stat.definition.StatDefinition> stat,
+            double value,
+            String message
+    ) {
+        helper.assertValueEqual(modifiers.size(), 1, message);
+        StatModifier modifier = modifiers.getFirst();
+        helper.assertValueEqual(modifier.stat(), stat, message);
+        helper.assertValueEqual(modifier.value(), value, message);
     }
 }

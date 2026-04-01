@@ -100,5 +100,31 @@
     9800,
     9900,
     0
-  ]
+  ],
+  "granted_modifiers": {
+    "2": [
+      {
+        "stat": "esekai2:life",
+        "operation": "add",
+        "value": 5.0,
+        "source_id": "esekai2:player_level_2_life"
+      }
+    ],
+    "3": [
+      {
+        "stat": "esekai2:mana",
+        "operation": "add",
+        "value": 10.0,
+        "source_id": "esekai2:player_level_3_mana"
+      }
+    ],
+    "4": [
+      {
+        "stat": "esekai2:accuracy",
+        "operation": "add",
+        "value": 7.0,
+        "source_id": "esekai2:player_level_4_accuracy"
+      }
+    ]
+  }
 }

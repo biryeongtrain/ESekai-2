@@ -13,6 +13,7 @@ import java.util.Objects;
 public final class PreparedSkillUse {
     private final SkillDefinition skill;
     private final SkillUseContext useContext;
+    private final String resource;
     private final double resourceCost;
     private final int useTimeTicks;
     private final int cooldownTicks;
@@ -24,6 +25,7 @@ public final class PreparedSkillUse {
     public PreparedSkillUse(
             SkillDefinition skill,
             SkillUseContext useContext,
+            String resource,
             double resourceCost,
             int useTimeTicks,
             int cooldownTicks,
@@ -34,6 +36,7 @@ public final class PreparedSkillUse {
     ) {
         this.skill = Objects.requireNonNull(skill, "skill");
         this.useContext = Objects.requireNonNull(useContext, "useContext");
+        this.resource = Objects.requireNonNull(resource, "resource");
         this.resourceCost = resourceCost;
         this.useTimeTicks = useTimeTicks;
         this.cooldownTicks = cooldownTicks;
@@ -49,6 +52,10 @@ public final class PreparedSkillUse {
 
     public SkillUseContext useContext() {
         return useContext;
+    }
+
+    public String resource() {
+        return resource;
     }
 
     public double resourceCost() {

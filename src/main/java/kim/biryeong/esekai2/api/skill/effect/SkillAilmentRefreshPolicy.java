@@ -8,8 +8,19 @@ import kim.biryeong.esekai2.api.ailment.AilmentType;
  * Controls how one ailment application refreshes an existing attachment-backed ailment.
  */
 public enum SkillAilmentRefreshPolicy {
+    /**
+     * Replaces an existing ailment only when the incoming payload is stronger, using remaining
+     * duration as a tie-breaker for equal potency.
+     */
     STRONGER_ONLY("stronger_only"),
+    /**
+     * Replaces an existing ailment only when the incoming payload lasts at least as long as the
+     * current one.
+     */
     LONGER_ONLY("longer_only"),
+    /**
+     * Always replaces the existing payload, even when the incoming ailment is weaker or shorter.
+     */
     OVERWRITE("overwrite");
 
     /**

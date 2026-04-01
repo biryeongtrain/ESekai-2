@@ -1,0 +1,5 @@
+{
+  "max_stat": "esekai2:mana",
+  "regeneration_per_second_stat": "esekai2:mana_regeneration_per_second",
+  "starts_full": true
+}

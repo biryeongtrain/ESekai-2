@@ -7,6 +7,8 @@ import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitContext;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
 import kim.biryeong.esekai2.api.ailment.AilmentType;
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
+import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.skill.calculation.SkillCalculationDefinition;
 import kim.biryeong.esekai2.api.skill.definition.SkillDefinition;
 import kim.biryeong.esekai2.api.skill.definition.graph.SkillAction;
@@ -28,6 +30,7 @@ import kim.biryeong.esekai2.api.skill.execution.PreparedSkillExecutionRoute;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillEntityComponent;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
+import kim.biryeong.esekai2.api.skill.execution.SkillPreparedStateLookup;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSoundAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonAtSightAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSummonBlockAction;
@@ -56,24 +59,35 @@ public final class SkillHitPreparationCalculator {
 
         SkillSupportMerger.SupportMergeResult mergeResult = SkillSupportMerger.merge(skill, context);
         SkillDefinition mergedSkill = mergeResult.skill();
-        SkillUseContext mergedContext = context.withAdditionalConditionalModifiers(mergeResult.additionalConditionalModifiers());
+        SkillUseContext mergedContext = context.withAdditionalConditionalModifiers(mergeResult.additionalConditionalModifiers())
+                .withActiveSkill(Identifier.tryParse(mergedSkill.identifier()), Math.max(mergedSkill.config().charges(), 0));
 
         double resourceCost = SkillRuntimeResolver.resolveResourceCost(mergedSkill, mergedContext);
         int useTimeTicks = SkillRuntimeResolver.resolveUseTimeTicks(mergedSkill, mergedContext);
         int cooldownTicks = SkillRuntimeResolver.resolveCooldownTicks(mergedSkill, mergedContext);
+        int maxCharges = Math.max(mergedSkill.config().charges(), 0);
+        int timesToCast = Math.max(mergedSkill.config().timesToCast(), 1);
         List<String> warnings = new ArrayList<>(mergeResult.warnings());
+        String resource = SkillRuntimeResolver.resolveResource(mergedSkill);
+        if (resourceCost > 0.0 && !PlayerResources.supports(resource)) {
+            warnings.add("resource_cost references unsupported resource: " + resource);
+        }
+        SkillUseContext preparedContext = mergedContext.withPreparedStateLookup(
+                SkillPreparedStateLookup.of(resourceCost, useTimeTicks, cooldownTicks, maxCharges, timesToCast)
+        );
 
         List<PreparedSkillExecutionRoute> onCastRoutes = parseRoutesFromRules(
                 mergedSkill.attached().onCast(),
                 SkillExecutionEvent.ON_CAST,
-                mergedContext,
+                preparedContext,
                 warnings
         );
-        ParsedComponents parsedComponents = parseComponents(mergedSkill.attached().entityComponents(), mergedContext, warnings);
+        ParsedComponents parsedComponents = parseComponents(mergedSkill.attached().entityComponents(), preparedContext, warnings);
 
         return new PreparedSkillUse(
                 mergedSkill,
-                mergedContext,
+                preparedContext,
+                resource,
                 resourceCost,
                 useTimeTicks,
                 cooldownTicks,
@@ -318,9 +332,12 @@ public final class SkillHitPreparationCalculator {
             List<String> warnings
     ) {
         String resource = readString(action.resource());
-        if (resource == null || !PreparedResourceDeltaAction.MANA_RESOURCE.equals(resource)) {
-            warnings.add("resource_delta action currently supports only resource: mana");
+        if (!PlayerResourceIds.isUsable(resource)) {
+            warnings.add("resource_delta action requires resource");
             return null;
+        }
+        if (!PlayerResources.supports(resource)) {
+            warnings.add("resource_delta references unsupported resource: " + resource);
         }
 
         double amount = resolveValue(action.amount(), context, 0.0);

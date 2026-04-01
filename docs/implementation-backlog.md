@@ -26,12 +26,11 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 46개입니다.
-- 현재 활성 백로그는 2개입니다.
+- 완료된 기반 작업은 현재 60개입니다.
+- 현재 활성 백로그는 1개입니다.
   - `Full data-driven skill system`
-  - `Ailment system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 292개가 전부 통과했습니다.
+- 최신 안정 기준에서는 required Fabric GameTest 377개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -43,8 +42,8 @@
 - 데미지 계산
   - damage type, breakdown, mitigation, hit/dot split, conversion, extra damage, exposure, penetration, crit, accuracy/evasion 이 구현되어 있습니다.
 - 아이템 시스템
-  - item affix foundation, affix classification, item level 이 구현되어 있습니다.
-  - Trinkets seam 은 준비되어 있지만 실제 장착 주입은 아직 연결되지 않았습니다.
+  - item affix foundation, affix classification, item level, persisted rolled affix state 가 구현되어 있습니다.
+  - vanilla equipment slot 기준 player combat stat projection 이 연결되어 있고, Trinkets seam 은 별도 후속 범위로 남아 있습니다.
 - 스킬 시스템
   - skill tag foundation 과 minimum runtime foundation 이 구현되어 있습니다.
   - `on_spell_cast`, `en_preds`, optional `calculation_id` reference surface 가 runtime 과 schema 양쪽에 연결되어 있습니다.
@@ -54,14 +53,16 @@
   - support semantics 가 확장되어 `appended_rules`, socket index precedence, 최소 predicate/condition tie-in 이 selected cast path 위에서 동작합니다.
   - `apply_effect` 와 legacy `apply_buff`, `apply_dot`, `apply_ailment` action 이 typed graph, selected cast path, support override path 에 연결되어 있습니다.
   - `heal` 과 `resource_delta` utility action 이 typed graph, selected cast path, support override path 에 연결되어 있고, `resource_delta` 는 현재 `mana` 회복/소모에 한해 server-side persistent resource state 를 갱신합니다.
+  - `PlayerCombatStats` runtime holder 와 `mana_regeneration_per_second` built-in stat 이 추가되어 online player mana regeneration 이 server tick 기준으로 persistent mana state 에 반영됩니다.
   - `MobEffect` 기반 buff/debuff authoring 이 `refresh_policy` 와 함께 datapack/schema/runtime/support override 경로에 연결되어 있습니다.
   - `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `CHILL`, `FREEZE`, `STUN` 은 `MobEffect + attachment payload` 구조로 실제 runtime tick, damage amplification, movement control, cast-block 경로에 연결되어 있습니다.
+  - control ailment 후속 polish 가 반영되어 `CHILL` 30% cap, `FREEZE/STUN` negative purge cleanup, runtime contract Javadoc, GameTest validation closure 가 정리되었습니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
 - 몬스터 시스템
   - monster stat baseline, monster level scaling, rarity 기반 item level derivation 이 구현되어 있습니다.
   - monster affix registry, weighted roll, live entity attach, runtime holder resolution 이 구현되어 있습니다.
 - 레벨 시스템
-  - player level/xp, monster level profile, item level 저장과 파생 규칙이 구현되어 있습니다.
+  - player level/xp, progression reward modifier, monster level profile, item level 저장과 파생 규칙이 구현되어 있습니다.
 
 ### Completed Foundations
 
@@ -300,10 +301,83 @@
    - `resource_delta` 는 현재 `mana` 만 지원하며, `PlayerResources`/`PlayerResourceService` 에 signed mana delta API 가 추가되어 server-side persistent mana 회복/소모를 clamp 와 함께 처리합니다.
    - sample `restorative_pulse`, `mana_surge`, `support_empowering_pulse`, `support_abundant_surge` fixture 와 함께 prepare decode, invalid resource warning, direct runtime heal/mana restore, selected cast support override, `build/junit.xml` 기반 validation closure 까지 포함해 required Fabric GameTest 292개 green baseline 이 검증되었습니다.
 
+47. Resource follow-up slice
+   - `CombatStats.MANA_REGENERATION_PER_SECOND`, built-in stat datapack, `PlayerCombatStats`, `PlayerCombatStatService`, `PlayerResourceRuntimeManager` 가 추가되어 online player mana regeneration 이 server tick 기준으로 persistent mana state 에 반영됩니다.
+   - mana regeneration 은 현재 `ServerPlayer` + positive `CombatStats.MANA` + positive `mana_regeneration_per_second` 조건에서만 동작하며, `PlayerResources` clamp semantics 위에서 max mana 를 넘지 않게 처리됩니다.
+   - `PlayerResourceGameTests`, `CombatStatsGameTests`, `fabric.mod.json` entrypoint, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 295개 green baseline 이 검증되었습니다.
+
+48. Ailment control formula and interaction polish
+   - `AilmentType` 공개 계약이 potency-backed ailment 와 control ailment semantics 기준으로 보강되었고, chill percent cap contract 가 문서와 테스트 기준으로 명시적으로 정리되었습니다.
+   - `CHILL` 은 30% cap 과 MobEffect amplifier mapping 이 회귀 테스트로 고정되었고, `STUN` 은 targeted negative purge 시 attachment payload 와 effect identity 가 함께 정리되는 cleanup contract 가 추가 검증되었습니다.
+   - `SkillAilmentGameTests`, `AilmentControlGameTests`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 297개 green baseline 이 검증되었습니다.
+
+49. PlayerCombatStats integration with progression and equipment
+   - `LevelProgressionEntry.grantedModifiers`, `LevelProgressionDefinition.grantedModifiers(level)`, `player_progression.granted_modifiers` schema 가 추가되어 player level row reward 를 datapack 에서 직접 정의할 수 있습니다.
+   - `ItemAffixState`, `ItemAffixes`, `ItemAffixComponents`, `ItemAffixBootstrap` 이 추가되어 rolled affix snapshot persistence 와 public facade 가 준비되었고, `PlayerCombatStatHolder` 는 progression reward + equipped `GLOBAL` affix + manual override overlay 를 dirty + lazy rebuild 로 합성합니다.
+   - `PlayerCombatStatGameTests`, `LevelProgressionGameTests`, `ItemAffixGameTests`, `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 305개 green baseline 이 검증되었습니다.
+
+50. Resource semantics polish and generic multi-resource pre-design
+   - `PlayerResourceIds`, named resource persistence seam, `SkillConfig.resource`, `PreparedSkillUse.resource()`, `PreparedResourceDeltaAction.resource` 가 정리되어 skill schema 와 prepared runtime payload 가 explicit resource id 를 안정적으로 보존합니다.
+   - 현재 서버 런타임 계약은 `mana` 만 실제 spend/regeneration/resource_delta execution 을 지원하고, unsupported named resource 는 prepare 단계 warning + prepared payload 보존 후 runtime block 또는 no-op 으로 처리되도록 고정되었습니다.
+   - `SkillResourceSemanticsGameTests`, `PlayerResourceGameTests`, updated `SkillExecutionGameTests`, updated `SkillExternalEffectGameTests`, `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 313개 green baseline 이 검증되었습니다.
+
+51. Alpha publishing readiness
+   - `fabric.mod.json` 의 description/authors/contact metadata 가 채워졌고, broken `icon` 참조는 제거되어 jar metadata 가 현재 산출물과 일치하도록 정리되었습니다.
+   - 루트에 `README.md`, `CHANGELOG.md` 가 추가되어 alpha release 범위, 설치 방법, known limitations, repository entrypoint 가 문서화되었습니다.
+   - `gradle.properties` release version 이 `0.1.0-alpha.1` 로 정리되었고, `build.gradle` jar packaging 은 실제 `LICENSE.txt` 를 산출물에 포함하도록 수정되었습니다.
+
+52. Player combat stat aggregate reuse in wider runtime graph
+   - `SkillUseContexts` public helper 가 추가되어 raw `SkillUseContext` constructor 를 유지한 채, player attacker 와 optional live defender entity 기준 recommended prepare/cast entrypoint 가 정리되었습니다.
+   - `LivingEntityCombatStatResolver` shared resolver 가 추가되어 player target 은 `PlayerCombatStats`, monster target 은 runtime-or-base holder, 기타 entity 는 empty fallback 으로 수렴했고, direct hit / generic DoT / ailment periodic fallback 이 같은 규칙을 재사용합니다.
+   - `SkillPlayerContextGameTests`, `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 317개 green baseline 이 검증되었습니다.
+
+53. Equipment `LOCAL` affix runtime
+   - `Skills.prepareUse(ItemStack, ...)`, `Skills.prepareSelectedUse(...)`, `Skills.castSelectedSkill(...)` 가 owner item 기준 `LOCAL` affix attacker overlay 를 재사용하도록 확장되었고, raw `Skills.prepareUse(skill, context)` 는 source item 이 없으므로 기존 no-op 경계를 유지합니다.
+   - `ItemLocalAffixStatOverlay`, `SkillUseContext.withAttackerStats(...)`, `ServerRuntimeAccess` seam 이 추가되어 selected/socket-backed prepare path 에서만 item-local modifier 를 ephemeral attacker holder 로 적용하고, player global combat holder projection 규칙은 그대로 `GLOBAL only` 로 유지합니다.
+   - `armour_use_time_t1`, `trinket_cooldown_t1` local affix fixture 와 `SkillLocalAffixRuntimeGameTests`, updated `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 321개 green baseline 이 검증되었습니다.
+
+54. Generic resource runtime registry/API actual expansion + resource-aware graph reuse
+   - `player_resource` registry, `PlayerResourceDefinition`, `PlayerResourceRegistries`, `PlayerResourceBootstrap`, `PlayerResourceRegistryAccess` 가 추가되어 built-in `mana` 와 sample `guard` resource 가 registry-backed metadata 로 승격되었습니다.
+   - `PlayerResources` 와 `PlayerResourceService` 는 registry-backed named resource overload, generic max/regeneration resolution, shared runtime regeneration tick loop 를 재사용하도록 확장되었고, `SkillExecutionExecutor`, `ServerSkillExecutionHooks`, `SkillHitPreparationCalculator` 는 registered non-mana `resource_cost` / `resource_delta` execution 을 실제 서버 런타임으로 연결합니다.
+   - `SkillResourceLookup`, `SkillResolvedResource`, `SkillUseContext.resourceLookup`, `SkillUseContexts` helper, `SkillValueExpressionType.resource_current/resource_max`, `SkillPredicateType.has_resource` 가 추가되어 resource-aware value/predicate reuse 가 datapack/runtime graph 에 연결되었고, `SkillResourceSemanticsGameTests`, `PlayerResourceGameTests`, `SkillValueGameTests`, `SkillResourceValuePredicateGameTests`, updated `SkillExecutionGameTests`, updated `SkillExternalEffectGameTests`, updated `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 328개 green baseline 이 검증되었습니다.
+
+55. Resource contract cleanup + wider calculation/predicate runtime reuse
+   - `PlayerResourceRuntimeManager` 는 `esekai2` built-in resource short id 호환을 유지하면서 non-`esekai2` namespaced resource 는 full canonical id 로 regeneration/runtime state 를 관리하도록 정리되었고, `PlayerResources` explicit-max compatibility seam Javadoc 이 registry-backed runtime 과 arbitrary bucket API 의 경계를 명시하도록 보강되었습니다.
+   - `SkillUseContext` 는 `SkillPlayerStateLookup`, active skill identity, active max charge payload 를 보존하도록 확장되었고, `SkillUseContexts` helper 는 live player cooldown/charge/burst state 와 `PRIMARY_TARGET` absent resource semantics 를 같은 public prepare helper 에 연결합니다.
+   - `SkillValueExpressionType.cooldown_remaining/charges_available/burst_remaining`, `SkillPredicateType.cooldown_ready/has_charges/has_burst_followup` 가 추가되어 wider runtime graph reuse 가 direct cast 와 selected cast 양쪽에서 player runtime state 를 재사용할 수 있게 되었고, `has_resource` 는 `SkillUseContext.resourceLookup()` 우선 규칙으로 정리되었습니다.
+   - sample `examplemod:focus` resource fixture, updated `PlayerResourceGameTests`, updated `SkillResourceValuePredicateGameTests`, updated `SkillValueGameTests`, updated `SkillExecutionGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 338개 green baseline 이 검증되었습니다.
+
+56. `prepareUse(ItemStack, ...)` live-server fallback seam hardening
+   - `Skills.prepareUse(ItemStack, Registry<SkillDefinition>, Registry<SkillSupportDefinition>, Registry<AffixDefinition>, SkillUseContext)` explicit overload 가 추가되어 owner-item `LOCAL` affix overlay 를 live server singleton 에 의존하지 않고 명시적으로 준비할 수 있게 되었습니다.
+   - 기존 4-arg `prepareUse(ItemStack, ...)` 는 compatibility shim 으로 유지되며, live server 가 있으면 기존처럼 registry 를 resolve 해서 위임하고, live server 가 없을 때는 rolled affix state 가 없는 stack 만 허용하며 affix state 가 있으면 deterministic `IllegalArgumentException` 으로 fail-fast 합니다.
+   - `prepareSelectedUse(...)` 는 기존 explicit server path semantics 를 그대로 유지하고, item local overlay 계산은 더 이상 item-stack prepare path 에서 silent no-op fallback 으로 빠지지 않습니다.
+   - new `SkillsPrepareUseGameTests`, updated `SkillLocalAffixRuntimeGameTests`, updated `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 345개 green baseline 이 검증되었습니다.
+
+57. Stable-facing public contract hardening
+   - `Skills`, `SkillUseContext`, `SkillUseContexts`, `PlayerResources` 공개 surface 의 Javadoc 이 raw path, recommended helper path, compatibility shim, registry-backed authoritative path 경계를 stable 수준으로 명시하도록 보강되었습니다.
+   - raw `SkillUseContext` 는 safe absent defaults, manual `withResourceLookup(...)` / `withPlayerStateLookup(...)` binding, `withActiveSkill(skillId, maxCharges)` 의 charge-state prerequisite 를 기준으로 계약이 정리되었고, `SkillUseContexts.forPlayer(...)` 는 live helper 이지만 active skill identity 는 후속 binding 전까지 비어 있다는 점이 명시되었습니다.
+   - `SkillValueGameTests` raw safe-default coverage, updated `SkillPlayerContextGameTests` helper/manual binding coverage, existing `SkillsPrepareUseGameTests`, existing `PlayerResourceGameTests`, updated `fabric.mod.json`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 355개 green baseline 이 검증되었습니다.
+
+58. Resource-authoring parity + control ailment formula polish + release stabilization
+   - `SkillSupportEffect.config_overrides` 와 `SkillConfigOverride` 가 추가되어 support 가 `resource` 와 `resource_cost` 를 whole-replace 로 덮을 수 있고, direct cast 와 selected cast 가 같은 merged `PreparedSkillUse` resource contract 를 집행하도록 정리되었습니다.
+   - `CombatStats.AILMENT_THRESHOLD`, `FREEZE_DURATION_INCREASED`, `STUN_DURATION_INCREASED` 와 `AilmentRuntime` control formula 가 추가되어 `FREEZE/STUN` 이 hit damage 대비 threshold 와 attacker-side duration increased stat 기반 effective duration 을 사용하고, zero `AILMENT_THRESHOLD` 는 `LIFE` fallback 계약으로 유지됩니다.
+   - `SkillExecutionExecutor` dimension resolution 은 direct key identifier accessor 로 바뀌었고, expected monster affix config fallback warning 은 stacktrace 없이 축소되며 truly unexpected runtime parse failure 는 stacktrace 를 유지합니다.
+   - updated `SkillSupportGameTests`, updated `SkillExecutionGameTests`, updated `SelectedSkillCastGameTests`, updated `AilmentControlGameTests`, `GameTestPlayers` helper, new stat datapacks, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 371개 green baseline 이 검증되었습니다.
+
+59. Prepared-state graph reuse follow-up
+   - `SkillPreparedStateLookup`, prepared-state-bound `SkillUseContext`, `SkillValueExpression.resource_cost/use_time_ticks/cooldown_ticks/max_charges/times_to_cast` 가 추가되어 support merge와 runtime stat 적용 뒤의 prepared 값을 graph action, selector, condition, predicate 에서 재사용할 수 있게 정리되었습니다.
+   - `SkillConfigOverride` 는 `cast_time_ticks`, `cooldown_ticks`, `times_to_cast`, `charges` 까지 확장되어 direct prepare 와 selected cast 가 같은 merged prepared-state graph 값을 보도록 맞춰졌고, sample `prepared_state_probe`, `support_prepared_state_tuning` fixture 가 datapack authoring path 를 닫습니다.
+   - updated `SkillValueGameTests`, updated `SkillExecutionGameTests`, updated `SkillSupportGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 377개 green baseline 이 검증되었습니다.
+
+60. Publish-facing documentation refresh
+   - `README.md` 가 현재 alpha capability 기준으로 resources/cooldowns/charges/burst runtime, prepared-state graph reuse, ailment/control surface, progression/affix runtime, current validation baseline 을 설명하도록 갱신되었습니다.
+   - `CHANGELOG.md` 의 `0.1.0-alpha.1` 는 initial packaging pass 수준에서 실제 alpha capability summary 수준으로 확장되었고, release-facing validation command 는 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 로 정리되었습니다.
+   - 현재 release verdict 는 `개발 서버 / 기술 프리뷰 배포 가능, 안정 공개 릴리즈는 아님` 으로 유지하고, 다음 release relevance 작업은 dedicated server smoke / stable checklist closure 로 고정합니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 292개 전부 통과입니다.
+- 최신 안정 기준에서는 required Fabric GameTest 377개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -473,41 +547,40 @@
      - `AoE-style calculation/predicate expansion`
      - `MobEffect-based buff/debuff effect integration`
      - `effect utility follow-up slice`
+     - `resource follow-up slice`
+     - `generic resource runtime registry/API actual expansion + resource-aware graph reuse`
    - 다음 작업 범위:
-     - resource follow-up slice 를 server-side runtime 기준으로 정리
-     - mana regeneration 과 persistent resource state update path 를 설계/집행
-     - 이후 화면 기획과 분리된 상태에서 resource semantics 를 GameTest 로 계속 검증
+     - wider calculation/predicate runtime reuse 를 resource axis 바깥 graph/runtime 경로로 확장
+     - `prepareUse(ItemStack, ...)` live-server fallback seam 을 stable contract 로 정리
+     - namespaced resource id normalization 과 explicit-max compatibility seam 정리 여부를 후속 contract cleanup 으로 결정
    - 후속 구현 순서:
-      - `resource follow-up slice`
+      - `wider calculation/predicate runtime reuse expansion`
    - 완료 기준:
      - calculation reference 와 predicate 축이 현재 damage/on-cast 중심 경계를 넘어 더 넓은 graph/runtime 경로에 연결됨
      - datapack author 가 더 많은 runtime gating/calculation 재사용을 코드 수정 없이 할 수 있음
      - GameTest 로 확장된 calculation/predicate semantics 가 selected cast path 와 함께 검증됨
 
-2. Ailment system
-   - 목적: PoE 감성의 주요 상태이상 계산 축을 도입한다.
-   - 포함 범위:
-     - `CHILL`, `FREEZE`, `STUN` 후속 공식 정리
-     - ailment 상호작용과 authoring polish
-   - 현재 완료 범위:
-     - `IGNITE`
-     - `SHOCK`
-     - `POISON`
-     - `BLEED`
-     - `CHILL`
-     - `FREEZE`
-     - `STUN`
-   - 제외 범위:
-     - 모든 세부 공식의 완전 복제
-   - 완료 기준:
-     - 후속 ailment 공식과 상호작용이 현재 foundation 위에서 확장 가능함
-     - GameTest 로 상태이상 부여, 지속, 제거, 후속 전투 영향이 계속 회귀 없이 유지됨
-
 ## Next Focus
 
-- 현재 다음 최소 작업은 `Full data-driven skill system` 입니다.
-- 방금 완료된 승인 단위는 `effect utility follow-up slice` 입니다.
-- 이번 완료 단위로 `heal`, `resource_delta`, `PreparedHealAction`, `PreparedResourceDeltaAction`, mana delta API, `restorative_pulse`, `mana_surge`, `support_empowering_pulse`, `support_abundant_surge`, direct/selected/support parity coverage, required Fabric GameTest 292 green baseline 이 추가되었습니다.
+- 현재 다음 최소 작업은 dedicated server smoke / stable checklist closure 입니다.
+- 직전 완료된 승인 단위는 publish-facing documentation refresh 입니다.
+- 직전 완료 단위로 `README.md`, `CHANGELOG.md`, release-facing validation command, current alpha verdict, known limitation wording 이 현재 377-test baseline 기준으로 정리되었습니다.
+- 현재 release verdict 는 `개발 서버 / 기술 프리뷰 배포 가능, 안정 공개 릴리즈는 아님` 입니다.
+- 그 다음 release relevance 후보는 remaining release stabilization cleanup 입니다.
+- 그 다음 large follow-up 후보는 Trinkets 실제 장착 주입 입니다.
+- 직전 완료된 승인 단위는 prepared-state graph reuse follow-up 입니다.
+- 이번 완료 단위로 `SkillPreparedStateLookup`, `SkillValueExpression.resource_cost/use_time_ticks/cooldown_ticks/max_charges/times_to_cast`, prepared-state-bound `SkillUseContext`, graph payload prepared-state reuse, widened `SkillConfigOverride` (`cast_time_ticks`, `cooldown_ticks`, `times_to_cast`, `charges`), `prepared_state_probe`, `support_prepared_state_tuning`, updated `SkillValueGameTests`, updated `SkillSupportGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 가 추가되었습니다.
+- 이번 완료 단위 검증으로 required Fabric GameTest 377 green baseline 이 갱신되었습니다.
+- 그 직전 완료된 승인 단위는 resource-authoring parity + control ailment formula polish + release stabilization 입니다.
+- 그 직전 완료 단위로 `SkillSupportEffect.config_overrides`, `SkillConfigOverride`, selected/direct resource override runtime parity, `CombatStats.AILMENT_THRESHOLD`, `FREEZE_DURATION_INCREASED`, `STUN_DURATION_INCREASED`, `AilmentRuntime` freeze/stun effective duration formula, zero-threshold `LIFE` fallback contract, direct dimension identifier resolution, monster affix expected-warning/logging split, updated `SkillExecutionGameTests`, updated `SelectedSkillCastGameTests`, updated `AilmentControlGameTests`, `GameTestPlayers`, `build/junit.xml` validation closure 가 추가되었습니다.
+- 그 직전 완료 단위 검증으로 required Fabric GameTest 371 green baseline 이 갱신되었습니다.
+- 직전 완료 단위는 `prepareUse(ItemStack, ...)` live-server fallback seam hardening 입니다.
+- 직전 완료 단위로 explicit affix-registry item prepare overload, compatibility shim fail-fast contract, no-server affix-state gate, `SkillsPrepareUseGameTests`, updated `SkillLocalAffixRuntimeGameTests`, updated `fabric.mod.json` 이 추가되었습니다.
+- 그 직전 완료 단위는 `resource contract cleanup + wider calculation/predicate runtime reuse` 입니다.
+- 직전 완료 단위로 `examplemod:focus` namespaced resource fixture, `PlayerResourceRuntimeManager` canonical id normalization, `has_resource` 의 `SkillResourceLookup` 우선 평가, helper-built `PRIMARY_TARGET` absent resource semantics, `SkillPlayerStateLookup` + `activeSkillId` 기반 `cooldown_remaining` / `charges_available` / `burst_remaining`, `cooldown_ready` / `has_charges` / `has_burst_followup`, direct/selected runtime-state graph reuse coverage 가 추가되었습니다.
+- 그 직전 완료 단위로 `Ailment control formula and interaction polish`, `AilmentType` 계약 보강, chill cap contract 문서화, `SkillAilmentGameTests` chill 30% cap coverage, `AilmentControlGameTests` control ailment negative purge cleanup coverage, required Fabric GameTest 297 green baseline 이 추가되었습니다.
+- 직전 완료 단위로 `resource follow-up slice`, `CombatStats.MANA_REGENERATION_PER_SECOND`, `mana_regeneration_per_second` stat datapack, `PlayerCombatStats`, `PlayerCombatStatService`, `PlayerResourceRuntimeManager`, online player mana regeneration, required Fabric GameTest 295 green baseline 이 추가되었습니다.
+- 그 이전 완료 단위로 `heal`, `resource_delta`, `PreparedHealAction`, `PreparedResourceDeltaAction`, mana delta API, `restorative_pulse`, `mana_surge`, `support_empowering_pulse`, `support_abundant_surge`, direct/selected/support parity coverage, required Fabric GameTest 292 green baseline 이 추가되었습니다.
 - 직전 승인 단위는 `times_to_cast burst runtime` 입니다.
 - 직전 완료 단위로 `PlayerSkillBurstState`, `PlayerSkillBursts`, player burst SavedData/service, selected cast/direct player runtime burst opener-follow-up-expiry, successful different-skill reset, cooldown-block keep-burst, mana-block keep-burst, `burst_strike`, `burst_focus`, `burst_reserve` fixture, required Fabric GameTest 284 green baseline 이 추가되었습니다.
 - 그 이전 승인 단위는 `Skill charges runtime` 입니다.
@@ -528,9 +601,8 @@
 - 이번 완료 단위로 `apply_effect`, legacy `apply_buff` compatibility, `MobEffectRefreshPolicy`, target debuff authoring, selected cast/support override, duration stacking semantics 가 추가되었습니다.
 - 직전 단위로 `MobEffect-based ailment foundation` 이 들어가 있으며 `apply_ailment`, `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `MobEffect + attachment payload`, `damage_taken_more` 연동이 검증되었습니다.
 - `AoE-style calculation/predicate expansion` 은 직전 단위에서 완료되었고, `calculation_id`, `skill_value`, route/selector/action predicate 는 AoE 지향 typed expression layer 로 이미 연결되어 있습니다.
-- `Ailment system` 은 foundation 범위가 확장되었고, 남은 범위는 `CHILL / FREEZE / STUN` 후속 공식 정리와 상호작용 polish 입니다.
-- 현재 다음 승인 단위는 `Full data-driven skill system` 의 후속 resource follow-up slice 입니다.
-- 다음 기능 후보는 mana regeneration 같은 resource follow-up slice, `Ailment system` 후속 공식 정리, release stabilization, 또는 generic multi-resource 설계 전 단계의 resource semantics polish 입니다.
+- `Ailment system` 의 현재 합의 범위는 이번 단위로 닫혔고, 이후 추가 ailment 작업은 새 scope 로 다시 backlog 화합니다.
+- 다음 기능 후보는 publish-facing documentation refresh 또는 dedicated server smoke / stable checklist closure 입니다.
 - support semantics expansion 은 완료되었고, support 는 이제 `action append + rule add` 와 최소 predicate/condition tie-in 을 가지며 socket index precedence 를 사용합니다.
 - selected active skill 기반 socket-backed cast path 는 구현되어 있으며, item 우클릭이 아니라 서버가 기억하는 플레이어별 selection state 를 기준으로 동작합니다.
 - 선행 기반은 준비되어 있습니다.
@@ -588,26 +660,27 @@
 
 ## Immediate Next Recommendation
 
-현재 가장 자연스러운 다음 최소 작업은 `Full data-driven skill system` 입니다.
+현재 가장 자연스러운 다음 최소 작업은 dedicated server smoke / stable checklist closure 입니다.
 
 이유는 다음과 같습니다.
 
-- schema, runtime graph, calculation reference, socket-backed support foundation 까지는 준비되었고, 아직 실제 active skill cast 흐름과 socket item 이 직접 연결되지는 않았습니다.
-- 이 경로를 먼저 닫아야 support 기반 콘텐츠와 이후 ailment/effect 확장이 실제 플레이 경로에 바로 붙습니다.
-- skill, item, monster, damage 기반은 이미 준비되어 있어 다음은 socket-backed cast path 를 닫는 것이 맞습니다.
+- publish-facing documentation refresh 가 끝나서 현재 alpha capability, known limitation, validation baseline, release verdict 가 외부 문서와 내부 backlog 에 맞춰졌습니다.
+- 따라서 다음 병목은 설명이 아니라 실제 운영 환경 기준 smoke/checklist 를 닫아 release 판단 근거를 더 단단하게 만드는 일입니다.
+- 지금 상태는 개발 서버 / 기술 프리뷰 배포는 가능하지만, stable public release 여부는 dedicated server 관점 검증과 남은 stabilization cleanup 에 달려 있습니다.
 
-즉, 지금 기준 병목은 `Full data-driven skill system` 입니다.
+즉, 지금 기준 병목은 dedicated server smoke / stable checklist closure 입니다.
 
 그 다음 우선순위는 현재 기준으로 아래 순서를 권장합니다.
 
-1. `Full data-driven skill system`
-2. `Ailment system`
+1. dedicated server smoke / stable checklist closure
+2. remaining release stabilization cleanup
+3. Trinkets 실제 장착 주입
 
 이 순서를 잡은 이유는 다음과 같습니다.
 
-- socket-backed cast path 를 닫으면 현재 support foundation 이 실제 런타임 사용 경로를 갖게 됩니다.
-- ailment system 은 data-driven skill execution 과 active skill 사용 경로가 정리된 뒤 연결하는 편이 후속 schema 확장이 덜 꼬입니다.
-- skill foundation 과 monster/item/combat 기반은 준비되어 있어, 다음은 skill runtime 사용 경로를 실제 아이템 상태와 이어 붙이는 것이 맞습니다.
+- current minimum runtime 은 이미 player/item/skill 경계에서 selected cast, item-local affix, ailment, generic resource runtime, resource-aware predicate/value reuse, prepared-state graph reuse, deterministic item-stack prepare contract, stable-facing public contract 까지 가집니다.
+- 하지만 지금 release verdict 는 여전히 alpha development/technical preview 수준이라서, 다음에는 dedicated server smoke 와 checklist 를 먼저 닫아야 합니다.
+- 그 뒤에 남은 release stabilization cleanup 을 줄이고, 마지막으로 large follow-up item 인 Trinkets runtime integration 을 평가하는 편이 실제 릴리즈 판단에 유리합니다.
 
 ## Update Rule
 

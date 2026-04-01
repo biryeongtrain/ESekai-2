@@ -3,6 +3,7 @@ package kim.biryeong.esekai2.api.level;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import kim.biryeong.esekai2.api.stat.modifier.StatModifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,8 +20,11 @@ public record LevelProgressionDefinition(
         List<LevelProgressionEntry> entries
 ) {
     private static final Codec<LevelProgressionDefinition> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
-            Codec.list(Codec.LONG).fieldOf("experience_to_next_level").forGetter(LevelProgressionDefinition::experienceToNextLevelColumn)
-    ).apply(instance, LevelProgressionDefinition::fromExperienceToNextLevelColumn));
+            Codec.list(Codec.LONG).fieldOf("experience_to_next_level").forGetter(LevelProgressionDefinition::experienceToNextLevelColumn),
+            Codec.unboundedMap(Codec.STRING, Codec.list(StatModifier.CODEC))
+                    .optionalFieldOf("granted_modifiers", Map.of())
+                    .forGetter(LevelProgressionDefinition::grantedModifiersColumn)
+    ).apply(instance, LevelProgressionDefinition::fromColumns));
 
     /**
      * Validated codec used to decode progression tables from datapacks and test fixtures.
@@ -60,6 +64,16 @@ public record LevelProgressionDefinition(
     }
 
     /**
+     * Returns the stat reward modifiers granted when the requested level is reached.
+     *
+     * @param level level whose reward row should be resolved
+     * @return immutable stat modifier list for the level
+     */
+    public List<StatModifier> grantedModifiers(int level) {
+        return entry(level).grantedModifiers();
+    }
+
+    /**
      * Returns the total experience required to reach the start of the requested level.
      *
      * @param level target level
@@ -75,10 +89,29 @@ public record LevelProgressionDefinition(
         return total;
     }
 
-    private static LevelProgressionDefinition fromExperienceToNextLevelColumn(List<Long> experienceToNextLevel) {
+    private static LevelProgressionDefinition fromColumns(
+            List<Long> experienceToNextLevel,
+            Map<String, List<StatModifier>> grantedModifiersByLevel
+    ) {
         List<LevelProgressionEntry> entries = new ArrayList<>(experienceToNextLevel.size());
+        Map<Integer, List<StatModifier>> parsedRewards = new LinkedHashMap<>();
+        for (Map.Entry<String, List<StatModifier>> entry : grantedModifiersByLevel.entrySet()) {
+            int level;
+            try {
+                level = Integer.parseInt(entry.getKey());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("granted_modifiers keys must be numeric level strings");
+            }
+            LevelRules.requireValidLevel(level, "granted_modifiers key");
+            parsedRewards.put(level, List.copyOf(entry.getValue()));
+        }
         for (int index = 0; index < experienceToNextLevel.size(); index++) {
-            entries.add(new LevelProgressionEntry(index + 1, experienceToNextLevel.get(index)));
+            int level = index + 1;
+            entries.add(new LevelProgressionEntry(
+                    level,
+                    experienceToNextLevel.get(index),
+                    parsedRewards.getOrDefault(level, List.of())
+            ));
         }
         return new LevelProgressionDefinition(entries);
     }
@@ -87,6 +120,17 @@ public record LevelProgressionDefinition(
         return entries.stream()
                 .map(LevelProgressionEntry::experienceToNextLevel)
                 .toList();
+    }
+
+    private Map<String, List<StatModifier>> grantedModifiersColumn() {
+        Map<String, List<StatModifier>> encoded = new LinkedHashMap<>();
+        for (LevelProgressionEntry entry : entries) {
+            if (entry.grantedModifiers().isEmpty()) {
+                continue;
+            }
+            encoded.put(Integer.toString(entry.level()), entry.grantedModifiers());
+        }
+        return Map.copyOf(encoded);
     }
 
     private static DataResult<LevelProgressionDefinition> validate(LevelProgressionDefinition definition) {

@@ -12,6 +12,7 @@ import kim.biryeong.esekai2.api.ailment.AilmentType;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageBreakdown;
 import kim.biryeong.esekai2.api.damage.breakdown.DamageType;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
 import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.effect.MobEffectRefreshPolicy;
@@ -983,8 +984,8 @@ public record SkillAction(
         }
 
         if (action.type() == SkillActionType.RESOURCE_DELTA) {
-            if (!"mana".equals(action.resource())) {
-                return DataResult.error(() -> "resource_delta action currently supports only resource: mana");
+            if (!PlayerResourceIds.isUsable(action.resource())) {
+                return DataResult.error(() -> "resource_delta action requires resource");
             }
             if (isDefaultExpression(action.amount(), 0.0)) {
                 return DataResult.error(() -> "resource_delta action requires amount");
@@ -1222,7 +1223,10 @@ public record SkillAction(
         if (expression.isStat()) {
             return expression.statId().toString();
         }
-        return expression.referenceId();
+        if (expression.isReference()) {
+            return expression.referenceId();
+        }
+        return expression.type().serializedName();
     }
 
     private static boolean isDefaultExpression(SkillValueExpression expression, double defaultValue) {

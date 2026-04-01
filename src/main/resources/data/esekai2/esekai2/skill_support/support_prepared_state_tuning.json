@@ -1,0 +1,21 @@
+{
+  "identifier": "esekai2:support_prepared_state_tuning",
+  "effects": [
+    {
+      "skill_condition": {
+        "required_tags": [
+          "spell"
+        ]
+      },
+      "config_overrides": [
+        {
+          "resource_cost": 4.0,
+          "cast_time_ticks": 6,
+          "cooldown_ticks": 11,
+          "times_to_cast": 5,
+          "charges": 4
+        }
+      ]
+    }
+  ]
+}

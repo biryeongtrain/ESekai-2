@@ -7,7 +7,6 @@ import kim.biryeong.esekai2.api.damage.calculation.DamageCalculationResult;
 import kim.biryeong.esekai2.api.damage.calculation.DamageCalculations;
 import kim.biryeong.esekai2.api.damage.calculation.HitDamageCalculation;
 import kim.biryeong.esekai2.api.damage.critical.HitKind;
-import kim.biryeong.esekai2.api.monster.stat.MonsterStats;
 import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyAilmentAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedApplyBuffAction;
@@ -25,11 +24,11 @@ import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionHooks;
 import kim.biryeong.esekai2.api.skill.effect.SkillEffectPurgeMode;
 import kim.biryeong.esekai2.api.stat.holder.StatHolder;
-import kim.biryeong.esekai2.api.stat.holder.StatHolders;
 import kim.biryeong.esekai2.impl.ailment.AilmentRuntime;
+import kim.biryeong.esekai2.impl.player.resource.PlayerResourceService;
 import kim.biryeong.esekai2.impl.skill.entity.SkillAnchoredEntity;
 import kim.biryeong.esekai2.impl.skill.entity.SkillProjectileEntity;
-import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
+import kim.biryeong.esekai2.impl.stat.runtime.LivingEntityCombatStatResolver;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -144,12 +143,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         Objects.requireNonNull(targets, "targets");
         Objects.requireNonNull(action, "action");
 
-        if (!PreparedResourceDeltaAction.MANA_RESOURCE.equals(action.resource())) {
-            return false;
-        }
-
-        double maxMana = context.preparedUse().useContext().attackerStats().resolvedValue(kim.biryeong.esekai2.api.stat.combat.CombatStats.MANA);
-        if (!Double.isFinite(maxMana) || maxMana <= 0.0) {
+        if (!PlayerResources.supports(action.resource())) {
             return false;
         }
 
@@ -162,9 +156,20 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
                 continue;
             }
 
-            double previousMana = PlayerResources.getMana(player, maxMana);
-            double nextMana = PlayerResources.addMana(player, action.amount(), maxMana).currentMana();
-            applied |= Double.compare(previousMana, nextMana) != 0;
+            double maxAmount = PlayerResources.maxAmount(player, action.resource());
+            if ((!Double.isFinite(maxAmount) || maxAmount <= 0.0) && context.level().getServer() != null) {
+                maxAmount = PlayerResourceService.definition(context.level().getServer(), action.resource())
+                        .map(definition -> context.preparedUse().useContext().attackerStats().resolvedValue(definition.maxStat()))
+                        .orElse(0.0);
+            }
+
+            double previousAmount = maxAmount > 0.0
+                    ? PlayerResources.getAmount(player, action.resource(), maxAmount)
+                    : PlayerResources.getAmount(player, action.resource());
+            double nextAmount = maxAmount > 0.0
+                    ? PlayerResources.add(player, action.resource(), action.amount(), maxAmount).currentAmount()
+                    : PlayerResources.add(player, action.resource(), action.amount()).currentAmount();
+            applied |= Double.compare(previousAmount, nextAmount) != 0;
         }
         return applied;
     }
@@ -389,6 +394,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
                     context.preparedUse().skill().identifier(),
                     action.ailmentType(),
                     hitResult,
+                    context.preparedUse().useContext().attackerStats(),
                     action.durationTicks(),
                     action.potencyMultiplierPercent(),
                     action.refreshPolicy()
@@ -563,10 +569,10 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
             LivingEntity target,
             PreparedDamageAction action
     ) {
-        StatHolder base = MonsterStats.resolveBaseHolder(target)
+        StatHolder base = LivingEntityCombatStatResolver.resolve(target)
                 .orElse(action.hitDamageCalculation().defenderStats() != null
                         ? action.hitDamageCalculation().defenderStats()
-                        : StatHolders.create(StatRegistryAccess.statRegistry(context.level().getServer())));
+                        : LivingEntityCombatStatResolver.empty(context.level().getServer()));
         return AilmentRuntime.resolveDefenderStats(context.level(), target, base);
     }
 

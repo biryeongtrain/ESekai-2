@@ -1,0 +1,5 @@
+{
+  "max_stat": "examplemod:focus",
+  "regeneration_per_second_stat": "examplemod:focus_regeneration_per_second",
+  "starts_full": false
+}

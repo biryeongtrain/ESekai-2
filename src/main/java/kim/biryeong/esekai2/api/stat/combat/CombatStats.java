@@ -18,9 +18,29 @@ public final class CombatStats {
     public static final ResourceKey<StatDefinition> LIFE = stat("life");
 
     /**
+     * Ailment application threshold used by control ailment duration scaling.
+     */
+    public static final ResourceKey<StatDefinition> AILMENT_THRESHOLD = stat("ailment_threshold");
+
+    /**
      * Base mana pool before later gameplay systems attach entity-specific values.
      */
     public static final ResourceKey<StatDefinition> MANA = stat("mana");
+
+    /**
+     * Flat mana recovery rate in mana per second.
+     */
+    public static final ResourceKey<StatDefinition> MANA_REGENERATION_PER_SECOND = stat("mana_regeneration_per_second");
+
+    /**
+     * Base guard pool used by the generic named-resource runtime fixture.
+     */
+    public static final ResourceKey<StatDefinition> GUARD = stat("guard");
+
+    /**
+     * Flat guard recovery rate in guard per second.
+     */
+    public static final ResourceKey<StatDefinition> GUARD_REGENERATION_PER_SECOND = stat("guard_regeneration_per_second");
 
     /**
      * Base energy shield pool before later gameplay systems attach entity-specific values.
@@ -106,6 +126,16 @@ public final class CombatStats {
      * Final multiplicative damage taken modifier applied after mitigation.
      */
     public static final ResourceKey<StatDefinition> DAMAGE_TAKEN_MORE = stat("damage_taken_more");
+
+    /**
+     * Percentage increased freeze duration applied after the freeze duration factor is resolved.
+     */
+    public static final ResourceKey<StatDefinition> FREEZE_DURATION_INCREASED = stat("freeze_duration_increased");
+
+    /**
+     * Percentage increased stun duration applied after the stun duration factor is resolved.
+     */
+    public static final ResourceKey<StatDefinition> STUN_DURATION_INCREASED = stat("stun_duration_increased");
 
     private CombatStats() {
     }

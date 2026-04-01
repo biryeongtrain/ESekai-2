@@ -7,6 +7,8 @@ import kim.biryeong.esekai2.api.item.affix.AffixKind;
 import kim.biryeong.esekai2.api.item.affix.AffixRegistries;
 import kim.biryeong.esekai2.api.item.affix.AffixScope;
 import kim.biryeong.esekai2.api.item.affix.Affixes;
+import kim.biryeong.esekai2.api.item.affix.ItemAffixState;
+import kim.biryeong.esekai2.api.item.affix.ItemAffixes;
 import kim.biryeong.esekai2.api.item.affix.RolledAffix;
 import kim.biryeong.esekai2.api.item.type.ItemFamily;
 import kim.biryeong.esekai2.api.stat.definition.StatRegistries;
@@ -16,6 +18,10 @@ import net.minecraft.core.Registry;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+
+import java.util.List;
 
 public final class ItemAffixGameTests {
     private static final Identifier TRINKET_LIFE_T1_AFFIX_ID = Identifier.fromNamespaceAndPath("esekai2", "trinket_life_t1");
@@ -282,6 +288,56 @@ public final class ItemAffixGameTests {
 
         helper.assertValueEqual(minimumRoll.modifiers().get(0).value(), 5.0, "Minimum roll should materialize the modifier minimum");
         helper.assertValueEqual(maximumRoll.modifiers().get(0).value(), 10.0, "Maximum roll should materialize the modifier maximum");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that persisted item affix state survives the public codec without losing rolled affix snapshots.
+     */
+    @GameTest
+    public void itemAffixStateCodecRoundTrips(GameTestHelper helper) {
+        AffixDefinition definition = affixRegistry(helper).getOptional(TRINKET_LIFE_T1_AFFIX_ID)
+                .orElseThrow(() -> helper.assertionException("Trinket life tier one affix should decode successfully"));
+        ItemAffixState state = new ItemAffixState(List.of(Affixes.roll(
+                TRINKET_LIFE_T1_AFFIX_ID,
+                ItemFamily.TRINKET,
+                20,
+                definition,
+                0.25
+        )));
+
+        var encoded = ItemAffixState.CODEC.encodeStart(JsonOps.INSTANCE, state)
+                .getOrThrow(message -> new IllegalStateException("Failed to encode item affix state: " + message));
+        ItemAffixState decoded = ItemAffixState.CODEC.parse(JsonOps.INSTANCE, encoded)
+                .getOrThrow(message -> new IllegalStateException("Failed to decode item affix state: " + message));
+
+        helper.assertValueEqual(decoded, state, "Item affix state should survive a codec round trip");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that the public item affix facade stores and clears persisted rolled affix state on item stacks.
+     */
+    @GameTest
+    public void itemAffixFacadeStoresAndClearsState(GameTestHelper helper) {
+        AffixDefinition definition = affixRegistry(helper).getOptional(TRINKET_LIFE_T1_AFFIX_ID)
+                .orElseThrow(() -> helper.assertionException("Trinket life tier one affix should decode successfully"));
+        ItemAffixState state = new ItemAffixState(List.of(Affixes.roll(
+                TRINKET_LIFE_T1_AFFIX_ID,
+                ItemFamily.TRINKET,
+                20,
+                definition,
+                1.0
+        )));
+        ItemStack stack = new ItemStack(Items.STICK);
+
+        ItemAffixes.set(stack, state);
+        helper.assertValueEqual(ItemAffixes.get(stack), state, "Stored item affix state should be readable through the public facade");
+        helper.assertValueEqual(ItemAffixes.getRolledAffixes(stack), state.rolledAffixes(),
+                "Stored rolled affixes should be exposed through the convenience accessor");
+
+        ItemAffixes.clear(stack);
+        helper.assertValueEqual(ItemAffixes.get(stack), ItemAffixState.EMPTY, "Clearing item affix state should restore the stable empty value");
         helper.succeed();
     }
 

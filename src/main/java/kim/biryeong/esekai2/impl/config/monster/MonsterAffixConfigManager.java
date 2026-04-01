@@ -14,6 +14,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 
 /**
  * Loads and exposes the server-side monster affix config.
@@ -69,14 +70,15 @@ public final class MonsterAffixConfigManager {
                 }
 
                 try {
-                    return MonsterAffixConfig.CODEC.parse(JsonOps.INSTANCE, json).resultOrPartial(message ->
-                            Esekai2.LOGGER.warn("Failed to parse monster affix config, using defaults: {}", message)
-                    ).orElseGet(() -> {
+                    Optional<MonsterAffixConfig> parsed = MonsterAffixConfig.CODEC.parse(JsonOps.INSTANCE, json).resultOrPartial(message ->
+                            Esekai2.LOGGER.warn("Invalid monster affix config at {}: {}; using defaults", path, message)
+                    );
+                    return parsed.orElseGet(() -> {
                         writeDefault(path);
                         return MonsterAffixConfig.DEFAULT;
                     });
                 } catch (RuntimeException exception) {
-                    Esekai2.LOGGER.warn("Monster affix config threw during parse, using defaults", exception);
+                    Esekai2.LOGGER.warn("Monster affix config parse failed at {}; using defaults", path, exception);
                     writeDefault(path);
                     return MonsterAffixConfig.DEFAULT;
                 }

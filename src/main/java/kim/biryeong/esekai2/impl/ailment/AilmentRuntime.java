@@ -18,6 +18,7 @@ import kim.biryeong.esekai2.api.stat.modifier.StatModifier;
 import kim.biryeong.esekai2.api.stat.modifier.StatModifierOperation;
 import kim.biryeong.esekai2.api.stat.value.StatInstance;
 import kim.biryeong.esekai2.impl.stat.registry.StatRegistryAccess;
+import kim.biryeong.esekai2.impl.stat.runtime.LivingEntityCombatStatResolver;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
@@ -40,6 +41,7 @@ public final class AilmentRuntime {
     private static final double IGNITE_TOTAL_RATIO = 0.50;
     private static final double POISON_TOTAL_RATIO = 0.30;
     private static final double BLEED_TOTAL_RATIO = 0.70;
+    // Shock and chill store percentage payloads instead of periodic damage.
     private static final double SHOCK_PERCENT_RATIO = 0.50;
     private static final double SHOCK_PERCENT_CAP = 50.0;
     private static final double CHILL_PERCENT_RATIO = 0.30;
@@ -54,6 +56,7 @@ public final class AilmentRuntime {
             String sourceSkillId,
             AilmentType type,
             DamageCalculationResult hitResult,
+            StatHolder attackerStats,
             int durationTicks,
             double potencyMultiplier,
             SkillAilmentRefreshPolicy refreshPolicy
@@ -62,6 +65,7 @@ public final class AilmentRuntime {
         Objects.requireNonNull(sourceSkillId, "sourceSkillId");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(hitResult, "hitResult");
+        Objects.requireNonNull(attackerStats, "attackerStats");
         Objects.requireNonNull(refreshPolicy, "refreshPolicy");
         if (durationTicks <= 0) {
             return false;
@@ -72,12 +76,19 @@ public final class AilmentRuntime {
             return false;
         }
 
+        int effectiveDurationTicks = type == AilmentType.FREEZE || type == AilmentType.STUN
+                ? controlAilmentDurationTicks(target, attackerStats, type, finalDealtDamage, durationTicks)
+                : durationTicks;
+        if (effectiveDurationTicks <= 0) {
+            return false;
+        }
+
         AilmentPayload incoming = createPayload(
                 type,
                 sourceSkillId,
                 Optional.ofNullable(sourceEntity).map(Entity::getUUID),
                 finalDealtDamage,
-                durationTicks,
+                effectiveDurationTicks,
                 potencyMultiplier
         );
         if (type.usesPotency() && incoming.potency() <= 0.0) {
@@ -265,7 +276,7 @@ public final class AilmentRuntime {
                     type,
                     sourceSkillId,
                     sourceEntityUuid,
-                    Math.min(CHILL_PERCENT_CAP, finalDealtDamage * CHILL_PERCENT_RATIO * multiplier),
+                    chillPercent(finalDealtDamage, multiplier),
                     durationTicks,
                     durationTicks,
                     1
@@ -296,6 +307,54 @@ public final class AilmentRuntime {
         double totalDamage = finalDealtDamage * totalDamageRatio * multiplier;
         double damagePerTick = tickCount <= 0 ? 0.0 : totalDamage / tickCount;
         return new AilmentPayload(type, sourceSkillId, sourceEntityUuid, damagePerTick, durationTicks, durationTicks, tickInterval);
+    }
+
+    private static int controlAilmentDurationTicks(
+            LivingEntity target,
+            StatHolder attackerStats,
+            AilmentType type,
+            double finalDealtDamage,
+            int baseDurationTicks
+    ) {
+        double ailmentThreshold = controlAilmentThreshold(target);
+        double durationIncreased = controlAilmentDurationIncreased(attackerStats, type);
+        double factor = clamp(finalDealtDamage / Math.max(1.0, ailmentThreshold), 0.0, 1.0);
+        double scaledDuration = Math.floor(baseDurationTicks * factor * (1.0 + durationIncreased / 100.0));
+        if (!Double.isFinite(scaledDuration) || scaledDuration <= 0.0) {
+            return 0;
+        }
+        if (scaledDuration >= Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) scaledDuration;
+    }
+
+    private static double controlAilmentThreshold(LivingEntity target) {
+        Optional<StatHolder> holder = LivingEntityCombatStatResolver.resolve(target);
+        double threshold = holder.map(statHolder -> statHolder.resolvedValue(CombatStats.AILMENT_THRESHOLD)).orElse(0.0);
+        if (!Double.isFinite(threshold) || threshold <= 0.0) {
+            threshold = holder.map(statHolder -> statHolder.resolvedValue(CombatStats.LIFE)).orElse(0.0);
+        }
+        if (!Double.isFinite(threshold) || threshold <= 0.0) {
+            threshold = 1.0;
+        }
+        return threshold;
+    }
+
+    private static double controlAilmentDurationIncreased(StatHolder attackerStats, AilmentType type) {
+        double durationIncreased = switch (type) {
+            case FREEZE -> attackerStats.resolvedValue(CombatStats.FREEZE_DURATION_INCREASED);
+            case STUN -> attackerStats.resolvedValue(CombatStats.STUN_DURATION_INCREASED);
+            default -> 0.0;
+        };
+        if (!Double.isFinite(durationIncreased)) {
+            return 0.0;
+        }
+        return durationIncreased;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private static boolean shouldReplace(
@@ -352,12 +411,16 @@ public final class AilmentRuntime {
                 || entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(AilmentBootstrap.effect(type))) != null;
     }
 
+    private static double chillPercent(double finalDealtDamage, double multiplier) {
+        return Math.min(CHILL_PERCENT_CAP, finalDealtDamage * CHILL_PERCENT_RATIO * multiplier);
+    }
+
     private static int effectAmplifier(AilmentPayload payload) {
         if (payload.type() != AilmentType.CHILL) {
             return 0;
         }
 
-        int potencyPercent = (int) Math.ceil(payload.potency());
+        int potencyPercent = (int) Math.ceil(Math.min(CHILL_PERCENT_CAP, payload.potency()));
         if (potencyPercent <= 0) {
             return 0;
         }

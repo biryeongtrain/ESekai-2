@@ -1,12 +1,18 @@
 package kim.biryeong.esekai2.api.skill.definition.graph;
 
+import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
+import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import kim.biryeong.esekai2.api.player.resource.PlayerResourceIds;
+import kim.biryeong.esekai2.api.player.resource.PlayerResources;
 import kim.biryeong.esekai2.api.skill.execution.SkillExecutionContext;
 import kim.biryeong.esekai2.api.skill.value.SkillValueExpression;
+import kim.biryeong.esekai2.impl.skill.execution.PlayerSkillRuntimeStateResolver;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -27,7 +33,9 @@ import java.util.Objects;
  * @param effectIds mob effect id list payload used by compound {@link SkillPredicateType#HAS_EFFECT} checks
  * @param match match policy used by {@link SkillPredicateType#HAS_EFFECT}
  * @param negate whether {@link SkillPredicateType#HAS_EFFECT} should invert its final result
- * @param subject entity subject inspected by {@link SkillPredicateType#HAS_EFFECT}
+ * @param subject entity subject inspected by {@link SkillPredicateType#HAS_EFFECT} and {@link SkillPredicateType#HAS_RESOURCE}
+ * @param resource resource id inspected by {@link SkillPredicateType#HAS_RESOURCE}
+ * @param amount threshold used by {@link SkillPredicateType#HAS_RESOURCE}
  */
 public record SkillPredicate(
         SkillPredicateType type,
@@ -36,7 +44,9 @@ public record SkillPredicate(
         List<String> effectIds,
         SkillPredicateMatchMode match,
         boolean negate,
-        SkillPredicateSubject subject
+        SkillPredicateSubject subject,
+        String resource,
+        SkillValueExpression amount
 ) {
     private static final Codec<SkillPredicate> BASE_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             SkillPredicateType.CODEC.fieldOf("type").forGetter(SkillPredicate::type),
@@ -49,6 +59,9 @@ public record SkillPredicate(
             Codec.BOOL.optionalFieldOf("negate", false).forGetter(SkillPredicate::negate),
             SkillPredicateSubject.CODEC.optionalFieldOf("subject", SkillPredicateSubject.PRIMARY_TARGET)
                     .forGetter(SkillPredicate::subject),
+            Codec.STRING.optionalFieldOf("resource", "").forGetter(SkillPredicate::resource),
+            SkillValueExpression.CODEC.optionalFieldOf("amount", SkillValueExpression.constant(0.0))
+                    .forGetter(SkillPredicate::amount),
             Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("map", Map.of())
                     .forGetter(SkillPredicate::legacyParameters)
     ).apply(instance, SkillPredicate::fromCodec));
@@ -66,6 +79,8 @@ public record SkillPredicate(
         effectIds = dedupeEffectIds(effectIds);
         Objects.requireNonNull(match, "match");
         Objects.requireNonNull(subject, "subject");
+        Objects.requireNonNull(resource, "resource");
+        Objects.requireNonNull(amount, "amount");
     }
 
     /**
@@ -82,7 +97,7 @@ public record SkillPredicate(
             String effectId,
             SkillPredicateSubject subject
     ) {
-        this(type, chance, effectId, List.of(), SkillPredicateMatchMode.ANY_OF, false, subject);
+        this(type, chance, effectId, List.of(), SkillPredicateMatchMode.ANY_OF, false, subject, "", SkillValueExpression.constant(0.0));
     }
 
     /**
@@ -92,7 +107,17 @@ public record SkillPredicate(
      * @param parameters legacy flat parameter map
      */
     public SkillPredicate(SkillPredicateType type, Map<String, String> parameters) {
-        this(type, readChance(parameters), readEffectId(parameters), readEffectIds(parameters), readMatch(parameters), readNegate(parameters), readSubject(parameters));
+        this(
+                type,
+                readChance(parameters),
+                readEffectId(parameters),
+                readEffectIds(parameters),
+                readMatch(parameters),
+                readNegate(parameters),
+                readSubject(parameters),
+                readResource(parameters),
+                readAmount(parameters)
+        );
     }
 
     /**
@@ -101,7 +126,7 @@ public record SkillPredicate(
      * @return always predicate
      */
     public static SkillPredicate always() {
-        return new SkillPredicate(SkillPredicateType.ALWAYS, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.ALWAYS, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
     }
 
     /**
@@ -110,7 +135,7 @@ public record SkillPredicate(
      * @return has-target predicate
      */
     public static SkillPredicate hasTarget() {
-        return new SkillPredicate(SkillPredicateType.HAS_TARGET, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.HAS_TARGET, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
     }
 
     /**
@@ -150,7 +175,7 @@ public record SkillPredicate(
         }
 
         String shorthandEffectId = serializedEffectIds.size() == 1 ? serializedEffectIds.getFirst() : "";
-        return new SkillPredicate(SkillPredicateType.HAS_EFFECT, SkillValueExpression.constant(1.0), shorthandEffectId, serializedEffectIds, match, negate, subject);
+        return new SkillPredicate(SkillPredicateType.HAS_EFFECT, SkillValueExpression.constant(1.0), shorthandEffectId, serializedEffectIds, match, negate, subject, "", SkillValueExpression.constant(0.0));
     }
 
     /**
@@ -160,7 +185,49 @@ public record SkillPredicate(
      * @return random chance predicate
      */
     public static SkillPredicate randomChance(SkillValueExpression chance) {
-        return new SkillPredicate(SkillPredicateType.RANDOM_CHANCE, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
+        return new SkillPredicate(SkillPredicateType.RANDOM_CHANCE, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
+    }
+
+    /**
+     * Creates a resource-threshold predicate.
+     *
+     * @param resource resource id that should be checked
+     * @param amount minimum current amount required for the predicate to pass
+     * @param subject entity subject to inspect
+     * @return has-resource predicate
+     */
+    public static SkillPredicate hasResource(String resource, SkillValueExpression amount, SkillPredicateSubject subject) {
+        Objects.requireNonNull(resource, "resource");
+        Objects.requireNonNull(amount, "amount");
+        Objects.requireNonNull(subject, "subject");
+        return new SkillPredicate(SkillPredicateType.HAS_RESOURCE, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, subject, resource, amount);
+    }
+
+    /**
+     * Creates a runtime predicate that passes when the current prepared skill is not on cooldown.
+     *
+     * @return cooldown-ready predicate
+     */
+    public static SkillPredicate cooldownReady() {
+        return new SkillPredicate(SkillPredicateType.COOLDOWN_READY, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
+    }
+
+    /**
+     * Creates a runtime predicate that passes when the current prepared skill has at least one available charge.
+     *
+     * @return has-charges predicate
+     */
+    public static SkillPredicate hasCharges() {
+        return new SkillPredicate(SkillPredicateType.HAS_CHARGES, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
+    }
+
+    /**
+     * Creates a runtime predicate that passes when the current prepared skill still has a burst follow-up cast available.
+     *
+     * @return has-burst-followup predicate
+     */
+    public static SkillPredicate hasBurstFollowup() {
+        return new SkillPredicate(SkillPredicateType.HAS_BURST_FOLLOWUP, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
     }
 
     /**
@@ -186,6 +253,10 @@ public record SkillPredicate(
                 parameters.put("negate", Boolean.toString(true));
             }
             parameters.put("subject", subject.serializedName());
+        } else if (type == SkillPredicateType.HAS_RESOURCE) {
+            parameters.put("resource", resource);
+            parameters.put("amount", serializeExpression(amount));
+            parameters.put("subject", subject.serializedName());
         }
         return Map.copyOf(parameters);
     }
@@ -202,6 +273,8 @@ public record SkillPredicate(
             SkillPredicateMatchMode match,
             boolean negate,
             SkillPredicateSubject subject,
+            String resource,
+            SkillValueExpression amount,
             Map<String, String> legacyParameters
     ) {
         if (type == SkillPredicateType.RANDOM_CHANCE) {
@@ -211,7 +284,7 @@ public record SkillPredicate(
                     chance = legacyChance;
                 }
             }
-            return new SkillPredicate(type, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
+            return new SkillPredicate(type, chance, "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
         }
 
         if (type == SkillPredicateType.HAS_EFFECT) {
@@ -230,10 +303,26 @@ public record SkillPredicate(
             if (subject == SkillPredicateSubject.PRIMARY_TARGET) {
                 subject = readSubject(legacyParameters);
             }
-            return new SkillPredicate(type, SkillValueExpression.constant(1.0), effectId, effectIds, match, negate, subject);
+            return new SkillPredicate(type, SkillValueExpression.constant(1.0), effectId, effectIds, match, negate, subject, "", SkillValueExpression.constant(0.0));
         }
 
-        return new SkillPredicate(type, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET);
+        if (type == SkillPredicateType.HAS_RESOURCE) {
+            if (resource.isBlank()) {
+                resource = readResource(legacyParameters);
+            }
+            if (amount.isConstant() && amount.constant() == 0.0) {
+                SkillValueExpression legacyAmount = readAmount(legacyParameters);
+                if (!legacyAmount.isConstant() || legacyAmount.constant() != 0.0) {
+                    amount = legacyAmount;
+                }
+            }
+            if (subject == SkillPredicateSubject.PRIMARY_TARGET) {
+                subject = readSubject(legacyParameters);
+            }
+            return new SkillPredicate(type, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, subject, resource, amount);
+        }
+
+        return new SkillPredicate(type, SkillValueExpression.constant(1.0), "", List.of(), SkillPredicateMatchMode.ANY_OF, false, SkillPredicateSubject.PRIMARY_TARGET, "", SkillValueExpression.constant(0.0));
     }
 
     private static DataResult<SkillPredicate> validate(SkillPredicate predicate) {
@@ -248,8 +337,36 @@ public record SkillPredicate(
                     return DataResult.error(() -> "has_effect predicate requires valid effect ids: " + effectId);
                 }
             }
+            if (!predicate.resource().isBlank()) {
+                return DataResult.error(() -> "resource is only supported by has_resource predicates");
+            }
+            if (!predicate.amount().isConstant() || predicate.amount().constant() != 0.0) {
+                return DataResult.error(() -> "amount is only supported by has_resource predicates");
+            }
+        } else if (predicate.type() == SkillPredicateType.HAS_RESOURCE) {
+            if (!PlayerResourceIds.isUsable(predicate.resource())) {
+                return DataResult.error(() -> "has_resource predicate requires resource");
+            }
+            if (predicate.amount().isConstant()) {
+                double constantAmount = predicate.amount().constant();
+                if (!Double.isFinite(constantAmount) || constantAmount < 0.0) {
+                    return DataResult.error(() -> "has_resource predicate requires amount >= 0");
+                }
+            }
+            if (!predicate.effectId().isBlank() || !predicate.effectIds().isEmpty()) {
+                return DataResult.error(() -> "effect_id and effect_ids are only supported by has_effect predicates");
+            }
+            if (predicate.match() != SkillPredicateMatchMode.ANY_OF || predicate.negate()) {
+                return DataResult.error(() -> "match and negate are only supported by has_effect predicates");
+            }
         } else if (predicate.match() != SkillPredicateMatchMode.ANY_OF || predicate.negate()) {
             return DataResult.error(() -> "match and negate are only supported by has_effect predicates");
+        } else if (!predicate.effectId().isBlank() || !predicate.effectIds().isEmpty()) {
+            return DataResult.error(() -> "effect_id and effect_ids are only supported by has_effect predicates");
+        } else if (!predicate.resource().isBlank()) {
+            return DataResult.error(() -> "resource is only supported by has_resource predicates");
+        } else if (!predicate.amount().isConstant() || predicate.amount().constant() != 0.0) {
+            return DataResult.error(() -> "amount is only supported by has_resource predicates");
         }
         return DataResult.success(predicate);
     }
@@ -267,7 +384,11 @@ public record SkillPredicate(
             case ALWAYS -> true;
             case HAS_TARGET -> context.target().isPresent();
             case HAS_EFFECT -> matchesHasEffect(context);
+            case HAS_RESOURCE -> matchesHasResource(context);
             case RANDOM_CHANCE -> matchesRandomChance(context);
+            case COOLDOWN_READY -> matchesCooldownReady(context);
+            case HAS_CHARGES -> matchesHasCharges(context);
+            case HAS_BURST_FOLLOWUP -> matchesHasBurstFollowup(context);
         };
     }
 
@@ -286,11 +407,7 @@ public record SkillPredicate(
             return false;
         }
 
-        Entity entity = switch (subject) {
-            case PRIMARY_TARGET -> context.primaryTarget();
-            case SELF -> context.source();
-            case TARGET -> context.target().orElse(null);
-        };
+        Entity entity = resolveSubjectEntity(context);
         if (!(entity instanceof LivingEntity livingEntity)) {
             return false;
         }
@@ -300,6 +417,52 @@ public record SkillPredicate(
             case ALL_OF -> resolvedEffectIds.stream().allMatch(effectId -> hasActiveEffect(livingEntity, effectId));
         };
         return negate ? !matches : matches;
+    }
+
+    private boolean matchesHasResource(SkillExecutionContext context) {
+        double requiredAmount = amount.resolve(context.preparedUse().useContext());
+        if (!Double.isFinite(requiredAmount) || requiredAmount < 0.0) {
+            return false;
+        }
+
+        var resolved = context.preparedUse().useContext().resourceLookup().resolve(resource, subject);
+        if (resolved.isPresent()) {
+            return resolved.orElseThrow().currentAmount() + 1.0E-6 >= requiredAmount;
+        }
+        if ((subject == SkillPredicateSubject.TARGET || subject == SkillPredicateSubject.PRIMARY_TARGET)
+                && context.target().isEmpty()) {
+            return false;
+        }
+
+        Entity entity = resolveSubjectEntity(context);
+        if (!(entity instanceof ServerPlayer player)) {
+            return false;
+        }
+        if (!PlayerResources.supports(resource)) {
+            return false;
+        }
+
+        return PlayerResources.getAmount(player, resource) + 1.0E-6 >= requiredAmount;
+    }
+
+    private boolean matchesCooldownReady(SkillExecutionContext context) {
+        return PlayerSkillRuntimeStateResolver.cooldownRemainingTicks(context) <= 0L;
+    }
+
+    private boolean matchesHasCharges(SkillExecutionContext context) {
+        return PlayerSkillRuntimeStateResolver.availableCharges(context) > 0;
+    }
+
+    private boolean matchesHasBurstFollowup(SkillExecutionContext context) {
+        return PlayerSkillRuntimeStateResolver.burstRemaining(context) > 0;
+    }
+
+    private Entity resolveSubjectEntity(SkillExecutionContext context) {
+        return switch (subject) {
+            case PRIMARY_TARGET -> context.primaryTarget();
+            case SELF -> context.source();
+            case TARGET -> context.target().orElse(null);
+        };
     }
 
     /**
@@ -351,6 +514,34 @@ public record SkillPredicate(
 
     private static List<String> readEffectIds(Map<String, String> parameters) {
         return parseEffectIds(parameters.get("effect_ids"));
+    }
+
+    private static String readResource(Map<String, String> parameters) {
+        String raw = parameters.get("resource");
+        return raw == null ? "" : raw;
+    }
+
+    private static SkillValueExpression readAmount(Map<String, String> parameters) {
+        String raw = parameters.get("amount");
+        if (raw == null || raw.isBlank()) {
+            return SkillValueExpression.constant(0.0);
+        }
+
+        try {
+            return SkillValueExpression.constant(Double.parseDouble(raw));
+        } catch (NumberFormatException ignored) {
+            try {
+                return SkillValueExpression.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(raw))
+                        .result()
+                        .orElseGet(() -> {
+                            Identifier parsed = Identifier.tryParse(raw);
+                            return parsed == null ? SkillValueExpression.constant(0.0) : SkillValueExpression.reference(parsed);
+                        });
+            } catch (RuntimeException ignoredJsonFailure) {
+                Identifier parsed = Identifier.tryParse(raw);
+                return parsed == null ? SkillValueExpression.constant(0.0) : SkillValueExpression.reference(parsed);
+            }
+        }
     }
 
     private static SkillPredicateSubject readSubject(Map<String, String> parameters) {
@@ -414,6 +605,12 @@ public record SkillPredicate(
         if (expression.isStat()) {
             return expression.statId().toString();
         }
-        return expression.referenceId();
+        if (expression.isReference()) {
+            return expression.referenceId();
+        }
+        return SkillValueExpression.CODEC.encodeStart(JsonOps.INSTANCE, expression)
+                .result()
+                .map(Object::toString)
+                .orElse("0.0");
     }
 }

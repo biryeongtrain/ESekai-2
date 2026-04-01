@@ -7,6 +7,8 @@
   "entrypoints": {
     "fabric-gametest": [
       "kim.biryeong.esekai2.impl.gametest.core.SmokeGameTests",
+      "kim.biryeong.esekai2.api.skill.execution.SkillsPrepareUseGameTests",
+      "kim.biryeong.esekai2.impl.gametest.player.PlayerResourceGameTests",
       "kim.biryeong.esekai2.impl.gametest.stat.StatHolderGameTests",
       "kim.biryeong.esekai2.impl.gametest.stat.CombatStatsGameTests",
       "kim.biryeong.esekai2.impl.gametest.damage.DamageTypeGameTests",
@@ -20,8 +22,14 @@
       "kim.biryeong.esekai2.impl.gametest.item.ItemAffixGameTests",
       "kim.biryeong.esekai2.impl.gametest.item.ItemLevelGameTests",
       "kim.biryeong.esekai2.impl.gametest.level.LevelProgressionGameTests",
+      "kim.biryeong.esekai2.impl.gametest.player.PlayerCombatStatGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillTagGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillValueGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillPlayerContextGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillLocalAffixRuntimeGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillExecutionGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillResourceSemanticsGameTests",
+      "kim.biryeong.esekai2.impl.gametest.skill.SkillResourceValuePredicateGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillSupportGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SelectedSkillCastGameTests",
       "kim.biryeong.esekai2.impl.gametest.skill.SkillAilmentGameTests",
