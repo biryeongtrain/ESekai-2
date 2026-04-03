@@ -58,6 +58,21 @@ public final class PlayerSkillCooldownService {
         return updated;
     }
 
+    public static PlayerSkillCooldownState clear(ServerPlayer player, Identifier skillId, long gameTime) {
+        Objects.requireNonNull(player, "player");
+        return clear(requireServer(player), player.getUUID(), skillId, gameTime);
+    }
+
+    public static PlayerSkillCooldownState clear(MinecraftServer server, UUID playerId, Identifier skillId, long gameTime) {
+        Objects.requireNonNull(server, "server");
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(skillId, "skillId");
+        PlayerSkillCooldownState current = get(server, playerId, gameTime);
+        PlayerSkillCooldownState updated = current.withCooldown(skillId, gameTime);
+        savedData(server).put(playerId, updated);
+        return updated;
+    }
+
     private static PlayerSkillCooldownSavedData savedData(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(PlayerSkillCooldownSavedData.TYPE);
     }

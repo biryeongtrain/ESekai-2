@@ -23,6 +23,12 @@
             "sound_id": "minecraft:block.glass.hit"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:frost_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.85
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 10.0

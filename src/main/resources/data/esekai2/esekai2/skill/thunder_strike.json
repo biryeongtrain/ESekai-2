@@ -23,6 +23,12 @@
             "sound_id": "minecraft:entity.lightning_bolt.thunder"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:shock_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.95
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 10.0

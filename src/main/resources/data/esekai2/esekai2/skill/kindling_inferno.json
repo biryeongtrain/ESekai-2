@@ -23,6 +23,12 @@
             "sound_id": "minecraft:item.firecharge.use"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:ember_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.95
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 10.0

@@ -23,6 +23,12 @@
             "sound_id": "minecraft:entity.player.attack.knockback"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:stun_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.55
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 11.0

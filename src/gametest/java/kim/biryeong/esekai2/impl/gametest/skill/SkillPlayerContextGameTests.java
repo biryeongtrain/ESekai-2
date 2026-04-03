@@ -222,8 +222,8 @@ public final class SkillPlayerContextGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected active skill cast should still succeed when using the player context helper");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2,
-                "Selected basic strike should execute its normal server-side cast path");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(),
+                "Selected basic strike should execute sound, particle, and damage on its normal server-side cast path");
         helper.assertTrue(zombie.getHealth() < zombie.getMaxHealth(),
                 "Selected active skill cast should still damage the monster target");
         helper.succeed();

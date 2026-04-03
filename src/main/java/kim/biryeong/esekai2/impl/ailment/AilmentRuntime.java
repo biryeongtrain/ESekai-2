@@ -37,7 +37,7 @@ import java.util.UUID;
  * Runtime helpers that apply, tick, and resolve attachment-backed ailments.
  */
 public final class AilmentRuntime {
-    private static final int DEFAULT_TICK_INTERVAL = 2;
+    private static final int DEFAULT_TICK_INTERVAL = AilmentPayload.DEFAULT_DAMAGE_TICK_INTERVAL_TICKS;
     private static final double IGNITE_TOTAL_RATIO = 0.50;
     private static final double POISON_TOTAL_RATIO = 0.30;
     private static final double BLEED_TOTAL_RATIO = 0.70;
@@ -169,6 +169,16 @@ public final class AilmentRuntime {
             return false;
         }
         return remove(entity, type);
+    }
+
+    static boolean hasActivePayload(LivingEntity entity, AilmentType type) {
+        Objects.requireNonNull(entity, "entity");
+        Objects.requireNonNull(type, "type");
+
+        return AilmentBootstrap.get(entity)
+                .flatMap(state -> state.get(type))
+                .filter(payload -> !payload.isExpired())
+                .isPresent();
     }
 
     public static Optional<AilmentType> blockingSkillExecutionAilment(LivingEntity entity) {
@@ -303,7 +313,7 @@ public final class AilmentRuntime {
             double totalDamageRatio
     ) {
         int tickInterval = DEFAULT_TICK_INTERVAL;
-        int tickCount = Math.max(1, durationTicks / tickInterval);
+        int tickCount = Math.max(1, (durationTicks + tickInterval - 1) / tickInterval);
         double totalDamage = finalDealtDamage * totalDamageRatio * multiplier;
         double damagePerTick = tickCount <= 0 ? 0.0 : totalDamage / tickCount;
         return new AilmentPayload(type, sourceSkillId, sourceEntityUuid, damagePerTick, durationTicks, durationTicks, tickInterval);
@@ -404,10 +414,7 @@ public final class AilmentRuntime {
     }
 
     private static boolean hasActive(LivingEntity entity, AilmentType type) {
-        return AilmentBootstrap.get(entity)
-                .flatMap(state -> state.get(type))
-                .filter(payload -> !payload.isExpired())
-                .isPresent()
+        return hasActivePayload(entity, type)
                 || entity.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(AilmentBootstrap.effect(type))) != null;
     }
 

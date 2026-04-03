@@ -337,7 +337,7 @@ public final class SkillExternalEffectGameTests {
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Battle focus should apply the configured mob effect to the caster"));
 
-        helper.assertValueEqual(result.executedActions(), 2, "Battle focus should execute both sound and buff actions");
+        helper.assertValueEqual(3, result.executedActions(), "Battle focus should execute sound, particle, and buff actions");
         helper.assertValueEqual(effectInstance.getAmplifier(), 1, "Battle focus should apply the configured amplifier");
         helper.assertTrue(effectInstance.getDuration() > 0, "Battle focus should apply a positive duration");
         helper.succeed();
@@ -359,7 +359,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Restorative pulse should execute both sound and heal actions");
+        helper.assertValueEqual(3, result.executedActions(), "Restorative pulse should execute sound, particle, and heal actions");
         helper.assertValueEqual(caster.getHealth(), caster.getMaxHealth(), "Heal actions should clamp at maximum health");
         helper.succeed();
     }
@@ -382,7 +382,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), player, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Mana surge should execute both sound and resource_delta actions");
+        helper.assertValueEqual(3, result.executedActions(), "Mana surge should execute sound, particle, and resource_delta actions");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 7.0, "resource_delta should restore the configured mana amount");
         helper.succeed();
     }
@@ -434,7 +434,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Cleanse focus should execute both sound and remove_effect actions when the caster has speed");
+        helper.assertValueEqual(3, result.executedActions(), "Cleanse focus should execute sound, particle, and remove_effect actions when the caster has speed");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Cleanse focus should remove the configured self-buff effect from the caster");
         helper.succeed();
@@ -476,7 +476,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Cleanse spectrum should execute both sound and remove_effect actions when configured effects are present");
+        helper.assertValueEqual(3, result.executedActions(), "Cleanse spectrum should execute sound, particle, and remove_effect actions when configured effects are present");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Cleanse spectrum should remove the configured vanilla effect");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
@@ -512,7 +512,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Purity wave should execute both sound and remove_effect actions when a beneficial effect is present");
+        helper.assertValueEqual(3, result.executedActions(), "Purity wave should execute sound, particle, and remove_effect actions when a beneficial effect is present");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Purity wave should remove beneficial effects");
         helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -555,7 +555,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Tainted release should execute both sound and remove_effect actions when harmful effects are present");
+        helper.assertValueEqual(3, result.executedActions(), "Tainted release should execute sound, particle, and remove_effect actions when harmful effects are present");
         helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Tainted release should leave beneficial effects untouched");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -602,7 +602,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Blank slate should execute both sound and remove_effect actions when any active effects are present");
+        helper.assertValueEqual(3, result.executedActions(), "Blank slate should execute sound, particle, and remove_effect actions when any active effects are present");
         helper.assertTrue(caster.getActiveEffects().isEmpty(), "Blank slate should remove all active effects");
         helper.assertTrue(Ailments.get(caster).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
                 "Blank slate should clear ailment attachment payloads while purging all");
@@ -639,7 +639,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Cathartic wave should execute both sound and remove_effect actions when purge union targets are present");
+        helper.assertValueEqual(3, result.executedActions(), "Cathartic wave should execute sound, particle, and remove_effect actions when purge union targets are present");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Cathartic wave should remove the purged beneficial effect");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
@@ -670,7 +670,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Purging hex should execute both sound and remove_effect actions when the target has slowness");
+        helper.assertValueEqual(3, result.executedActions(), "Purging hex should execute sound, particle, and remove_effect actions when the target has slowness");
         helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
                 "Purging hex should remove the configured debuff effect from the target");
         helper.succeed();
@@ -700,7 +700,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.empty())
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Cleanse spectrum should count as executed when at least one configured effect is removed");
+        helper.assertValueEqual(3, result.executedActions(), "Cleanse spectrum should count as executed when at least one configured effect is removed");
         helper.assertValueEqual(result.skippedActions(), 0, "Cleanse spectrum should not be skipped when one configured effect is successfully removed");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
                 "Cleanse spectrum should remove poison even when speed was never present");
@@ -725,7 +725,7 @@ public final class SkillExternalEffectGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
         );
 
-        helper.assertValueEqual(result.executedActions(), 1, "Purging hex should only execute its sound action when the target lacks the effect");
+        helper.assertValueEqual(2, result.executedActions(), "Purging hex should execute both sound and particle actions when the target lacks the effect");
         helper.assertValueEqual(result.skippedActions(), 1, "Purging hex should treat the missing remove_effect target as a skipped action");
         helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
                 "Purging hex should leave the target unchanged when the configured effect is absent");
@@ -758,7 +758,7 @@ public final class SkillExternalEffectGameTests {
                 )
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Purity wave should execute both sound and remove_effect when a beneficial effect exists");
+        helper.assertValueEqual(3, result.executedActions(), "Purity wave should execute sound, particle, and remove_effect when a beneficial effect exists");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Purity wave should remove speed through purge:positive");
         helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -801,7 +801,7 @@ public final class SkillExternalEffectGameTests {
                 )
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Tainted release should execute both sound and remove_effect when harmful effects exist");
+        helper.assertValueEqual(3, result.executedActions(), "Tainted release should execute sound, particle, and remove_effect when harmful effects exist");
         helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Tainted release should keep beneficial effects");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -848,7 +848,7 @@ public final class SkillExternalEffectGameTests {
                 )
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Blank slate should execute both sound and remove_effect when any effects exist");
+        helper.assertValueEqual(3, result.executedActions(), "Blank slate should execute sound, particle, and remove_effect when any effects exist");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Blank slate should remove beneficial effects through purge:all");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -895,7 +895,7 @@ public final class SkillExternalEffectGameTests {
                 )
         );
 
-        helper.assertValueEqual(result.executedActions(), 2, "Cathartic wave should execute both sound and remove_effect when either purge or explicit targets exist");
+        helper.assertValueEqual(3, result.executedActions(), "Cathartic wave should execute sound, particle, and remove_effect when either purge or explicit targets exist");
         helper.assertTrue(!caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Cathartic wave should purge beneficial effects through purge:positive");
         helper.assertTrue(caster.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -1129,7 +1129,7 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected cleanse focus cast should succeed");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected cleanse focus should execute both sound and remove_effect actions when poison is present");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Selected cleanse focus should execute sound, particle, and remove_effect actions when poison is present");
         helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
                 "Selected cleanse focus should remove the poison MobEffect identity");
         helper.assertTrue(Ailments.get(player).flatMap(state -> state.get(AilmentType.POISON)).isEmpty(),
@@ -1177,7 +1177,7 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected cleanse focus cast should succeed with multi-remove support");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected cleanse focus should execute both sound and remove_effect actions when supported targets are present");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Selected cleanse focus should execute sound, particle, and remove_effect actions when supported targets are present");
         helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
                 "Selected cleanse focus should remove the support-overridden slowness effect");
         helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, POISON_EFFECT_ID))),
@@ -1226,8 +1226,8 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected purity wave cast should succeed with purge override");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2,
-                "Selected purity wave should execute both sound and remove_effect actions when overridden purge targets exist");
+        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 3,
+                "Selected purity wave should execute sound, particle, and remove_effect actions when overridden purge targets exist");
         helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Selected purity wave should keep beneficial effects after purge override to negative");
         helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -1278,7 +1278,7 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected purity wave cast should succeed with purge override support");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected purity wave should execute both sound and remove_effect actions when overridden purge targets are present");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Selected purity wave should execute sound, particle, and remove_effect actions when overridden purge targets are present");
         helper.assertTrue(player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, BATTLE_FOCUS_EFFECT_ID))),
                 "Selected purity wave should keep beneficial effects when the support overrides purge to negative");
         helper.assertTrue(!player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(helper, CRIPPLING_HEX_EFFECT_ID))),
@@ -1415,7 +1415,7 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected restorative pulse cast should succeed");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected restorative pulse should execute both sound and heal actions");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Selected restorative pulse should execute sound, particle, and heal actions");
         helper.assertValueEqual(player.getHealth(), player.getMaxHealth() - 2.0F, "Selected heal support override should increase the restored health");
         helper.succeed();
     }
@@ -1442,7 +1442,7 @@ public final class SkillExternalEffectGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected mana surge cast should succeed");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Selected mana surge should execute both sound and resource_delta actions");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Selected mana surge should execute sound, particle, and resource_delta actions");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 15.0, "Selected resource_delta support override should increase restored mana");
         helper.succeed();
     }

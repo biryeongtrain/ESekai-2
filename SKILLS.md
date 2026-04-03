@@ -35,6 +35,46 @@
 
 ### 2026-03-31
 
+- 사용자 지적: ailment 가 붙어도 hidden MobEffect identity 가 1틱 뒤 사라져 poison/ignite/bleed 같은 periodic ailment 가 계속 ticking 되지 않을 수 있다.
+- 원인:
+  - `MobEffect.applyEffectTick(...)` 반환값을 “이번 틱에 데미지 같은 사이드이펙트가 있었는가”로 잘못 해석했다.
+  - attachment-backed ailment runtime 에서는 비-damage 틱에 `false` 를 반환할 수 있는데, Minecraft 는 이를 effect 종료 신호로 사용한다.
+  - 기존 GameTest 도 “한 번 체력이 줄었는가”만 보거나 `AilmentRuntime.tick(...)` 을 직접 호출해 live MobEffect lifecycle 을 충분히 검증하지 못했다.
+- 재발 방지:
+  - attachment-backed `MobEffect` 구현은 반환값을 “payload 가 아직 active 인가” 기준으로 설계한다.
+  - periodic ailment 테스트는 최소한 다음을 함께 검증한다.
+    - 첫 비-damage 틱 뒤에도 hidden effect identity 가 유지됨
+    - 여러 interval 에 걸쳐 periodic damage 가 계속 발생함
+    - 만료 시 payload 와 effect identity 가 둘 다 정리됨
+  - runtime helper 를 직접 호출하는 테스트만으로 live MobEffect lifecycle 이 검증됐다고 간주하지 않는다.
+
+- 사용자 지적: ailment periodic damage 는 너무 빠른 tick cadence 가 아니라 초 단위 cadence 로 적용되어야 한다.
+- 원인:
+  - DoT ailment 기본 `tick_interval_ticks` 를 `2` 로 두어 poison/ignite/bleed 가 지나치게 자주 damage 를 주고 있었다.
+  - 짧은 duration ailment 가 있는 상태에서 interval 만 느리게 바꾸면 damage tick 이 아예 사라질 수 있는 구조도 함께 고려되지 않았다.
+- 재발 방지:
+  - ailment periodic damage cadence 변경 시 기본 interval 뿐 아니라 `tickCount`, expiry tick 처리, 짧은 duration fallback 을 같이 설계한다.
+  - duration 이 interval 보다 짧은 ailment 는 expiry 시점 damage 여부를 명시적으로 결정하고 GameTest 로 고정한다.
+  - poison/ignite/bleed 테스트는 “1초 전에는 안 터짐”, “1초 이상이면 주기적으로 터짐”, “짧은 지속시간은 expiry 에서 1회 처리됨”을 함께 검증한다.
+
+- 사용자 지적: command 입력이 registry-backed identifier 인데 `StringArgumentType` 로 받으면 안 되고, `IdentifierArgument` 와 탭 컴플리트를 붙여야 한다.
+- 원인:
+  - 디버그 커맨드 구현에서 빠르게 surface 를 여는 데만 집중하면서, registry 입력의 타입 안정성과 authoring UX 를 충분히 고려하지 않았다.
+  - `skill_id`, `stat_id`, `resource` 같은 값을 문자열로 받으면 잘못된 namespace 처리와 탭 컴플리트 누락이 같이 발생한다.
+- 재발 방지:
+  - registry-backed id 입력은 기본적으로 `IdentifierArgument` 를 사용한다.
+  - command 입력이 registry나 enum 기반이면 argument 타입 자체와 suggestion provider 를 같이 설계한다.
+  - `StringArgumentType` 는 free-form 텍스트나 정말 목록형 identifier 를 한 인자에 압축할 때만 예외적으로 사용한다.
+
+- 사용자 지적: Minecraft `26.1` 환경에서는 `fabric-permissions-api` 같은 포함 의존성에 `modImplementation` 을 쓰지 말고 `implementation(include(...))` 를 사용해야 한다.
+- 원인:
+  - 예전 난독화/로더 관성대로 포함 의존성에 `modImplementation` 을 사용했다.
+  - 현재 프로젝트 기준인 Minecraft `26.1` 의 비난독화 환경과 이 프로젝트의 의존성 wiring 규칙을 반영하지 못했다.
+- 재발 방지:
+  - ESekai `26.1` 환경에서 포함 의존성 추가 시 기본값은 `implementation(include(...))` 로 둔다.
+  - `modImplementation` 은 기존 패턴이라는 이유로 관성적으로 쓰지 않고, 실제 Loom/Fabric wiring 필요성이 확인된 경우에만 사용한다.
+  - 새 라이브러리 추가 전에는 같은 `build.gradle` 의 기존 dependency style 과 현재 Minecraft/Fabric 버전 계약을 먼저 확인한다.
+
 - 사용자 지적: 병렬 작업 가능한 항목은 메인 에이전트가 먼저 선별하고, 그 하위 작업을 워커에게 직접 위임해야 한다.
 - 원인:
   - 병렬 작업 의지는 있었지만, 사용자 확인 없이 어떤 단위를 병렬화할지 메인 에이전트가 충분히 먼저 정리하지 않으면 위임 구조가 모호해질 수 있다.

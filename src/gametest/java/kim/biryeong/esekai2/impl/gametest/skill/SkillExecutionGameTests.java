@@ -33,6 +33,7 @@ import kim.biryeong.esekai2.api.skill.effect.SkillAilmentRefreshPolicy;
 import kim.biryeong.esekai2.api.skill.execution.PreparedDamageAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedHealAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedResourceDeltaAction;
+import kim.biryeong.esekai2.api.skill.execution.PreparedSandstormParticleAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillAction;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillEntityComponent;
 import kim.biryeong.esekai2.api.skill.execution.PreparedSkillUse;
@@ -734,8 +735,9 @@ public final class SkillExecutionGameTests {
         );
 
         List<String> actionTypes = prepared.onCastActions().stream().map(PreparedSkillAction::actionType).toList();
-        helper.assertValueEqual(actionTypes.contains("sound"), true, "Basic strike should expose a sound action in on-cast");
-        helper.assertValueEqual(actionTypes.contains("damage"), true, "Basic strike should expose a damage action in on-cast");
+        helper.assertValueEqual(true, actionTypes.contains("sound"), "Basic strike should expose a sound action in on-cast");
+        helper.assertValueEqual(true, actionTypes.contains("sandstorm_particle"), "Basic strike should expose a particle action in on-cast");
+        helper.assertValueEqual(true, actionTypes.contains("damage"), "Basic strike should expose a damage action in on-cast");
         helper.succeed();
     }
 
@@ -793,6 +795,143 @@ public final class SkillExecutionGameTests {
         List<String> tickActionsAt7 = prepared.executeTick("basic_strike_component", 7).stream().map(PreparedSkillAction::actionType).toList();
         helper.assertTrue(!tickActionsAt6.isEmpty(), "Tick condition should run on multiples of the configured interval");
         helper.assertValueEqual(tickActionsAt7.isEmpty(), true, "Tick condition should not run on non-multiples");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that the basic strike sample skill binds its custom Sandstorm particle identifiers.
+     */
+    @GameTest
+    public void basicStrikeUsesBundledSandstormParticleIdentifiers(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                basicStrike(helper),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.25)
+        );
+
+        PreparedSandstormParticleAction onCastParticle = prepared.onCastActions().stream()
+                .filter(PreparedSandstormParticleAction.class::isInstance)
+                .map(PreparedSandstormParticleAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Basic strike should expose an on-cast Sandstorm particle action"));
+        PreparedSandstormParticleAction tickParticle = prepared.executeTick("basic_strike_component", 6).stream()
+                .filter(PreparedSandstormParticleAction.class::isInstance)
+                .map(PreparedSandstormParticleAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Basic strike component should expose a tick Sandstorm particle action"));
+
+        helper.assertValueEqual(Identifier.fromNamespaceAndPath("esekai2", "basic_strike_burst"), onCastParticle.particleId(),
+                "Basic strike on-cast particle should use the bundled custom particle id");
+        helper.assertValueEqual(Identifier.fromNamespaceAndPath("esekai2", "basic_strike_burst"), tickParticle.particleId(),
+                "Basic strike tick particle should use the bundled custom particle id");
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that attack-oriented sample fixtures bind their bundled on-cast Sandstorm particle ids.
+     */
+    @GameTest
+    public void attackFixturesUseBundledOnCastSandstormParticleIdentifiers(GameTestHelper helper) {
+        Map<Identifier, Identifier> expectedParticles = Map.ofEntries(
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "bloodletting_strike"), Identifier.fromNamespaceAndPath("esekai2", "bleed_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "burst_strike"), Identifier.fromNamespaceAndPath("esekai2", "arcane_burst_pulse")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "concussive_slam"), Identifier.fromNamespaceAndPath("esekai2", "stun_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "dazing_tap"), Identifier.fromNamespaceAndPath("esekai2", "stun_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "deep_freeze"), Identifier.fromNamespaceAndPath("esekai2", "freeze_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "frostbite_touch"), Identifier.fromNamespaceAndPath("esekai2", "frost_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "ice_prison"), Identifier.fromNamespaceAndPath("esekai2", "freeze_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "kindling_ember"), Identifier.fromNamespaceAndPath("esekai2", "ember_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "kindling_inferno"), Identifier.fromNamespaceAndPath("esekai2", "ember_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "kindling_strike"), Identifier.fromNamespaceAndPath("esekai2", "ember_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "rime_crush"), Identifier.fromNamespaceAndPath("esekai2", "frost_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "thunder_strike"), Identifier.fromNamespaceAndPath("esekai2", "shock_strike_burst")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "venom_strike"), Identifier.fromNamespaceAndPath("esekai2", "toxic_strike_burst"))
+        );
+
+        for (Map.Entry<Identifier, Identifier> entry : expectedParticles.entrySet()) {
+            PreparedSkillUse prepared = Skills.prepareUse(
+                    skill(helper, entry.getKey()),
+                    new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.25)
+            );
+
+            PreparedSandstormParticleAction particleAction = prepared.onCastActions().stream()
+                    .filter(PreparedSandstormParticleAction.class::isInstance)
+                    .map(PreparedSandstormParticleAction.class::cast)
+                    .findFirst()
+                    .orElseThrow(() -> helper.assertionException("Attack fixture should expose an on-cast Sandstorm particle action: " + entry.getKey()));
+
+            helper.assertValueEqual(entry.getValue(), particleAction.particleId(),
+                    "Attack fixture should keep its bundled on-cast Sandstorm particle id: " + entry.getKey());
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that support-oriented sample fixtures bind their bundled on-cast Sandstorm particle ids.
+     */
+    @GameTest
+    public void supportiveFixturesUseBundledOnCastSandstormParticleIdentifiers(GameTestHelper helper) {
+        Map<Identifier, Identifier> expectedParticles = Map.ofEntries(
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "battle_focus"), Identifier.fromNamespaceAndPath("esekai2", "focus_guard_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "burst_focus"), Identifier.fromNamespaceAndPath("esekai2", "focus_burst_pulse")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "charged_focus"), Identifier.fromNamespaceAndPath("esekai2", "charged_focus_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "cleanse_focus"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "cleanse_spectrum"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "cathartic_wave"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "purity_wave"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "tainted_release"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "blank_slate"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "purging_hex"), Identifier.fromNamespaceAndPath("esekai2", "cleanse_wave_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "mana_surge"), Identifier.fromNamespaceAndPath("esekai2", "resource_charge_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "restorative_pulse"), Identifier.fromNamespaceAndPath("esekai2", "restorative_pulse_ring")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "overworld_barrier"), Identifier.fromNamespaceAndPath("esekai2", "barrier_guard_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "burst_reserve"), Identifier.fromNamespaceAndPath("esekai2", "resource_charge_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "charged_reserve"), Identifier.fromNamespaceAndPath("esekai2", "resource_charge_aura")),
+                Map.entry(Identifier.fromNamespaceAndPath("esekai2", "charged_surge"), Identifier.fromNamespaceAndPath("esekai2", "resource_charge_aura"))
+        );
+
+        for (Map.Entry<Identifier, Identifier> entry : expectedParticles.entrySet()) {
+            PreparedSkillUse prepared = Skills.prepareUse(
+                    skill(helper, entry.getKey()),
+                    new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.25)
+            );
+
+            PreparedSandstormParticleAction particleAction = prepared.onCastActions().stream()
+                    .filter(PreparedSandstormParticleAction.class::isInstance)
+                    .map(PreparedSandstormParticleAction.class::cast)
+                    .findFirst()
+                    .orElseThrow(() -> helper.assertionException("Supportive fixture should expose an on-cast Sandstorm particle action: " + entry.getKey()));
+
+            helper.assertValueEqual(entry.getValue(), particleAction.particleId(),
+                    "Supportive fixture should keep its bundled on-cast Sandstorm particle id: " + entry.getKey());
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Verifies that the fireball sample fixture binds bundled custom particle ids on cast and projectile tick routes.
+     */
+    @GameTest
+    public void fireballUsesBundledSandstormParticleIdentifiers(GameTestHelper helper) {
+        PreparedSkillUse prepared = Skills.prepareUse(
+                fireball(helper),
+                new SkillUseContext(newHolder(helper), newHolder(helper), List.of(), 0.0, 0.25)
+        );
+
+        PreparedSandstormParticleAction onCastParticle = prepared.onCastActions().stream()
+                .filter(PreparedSandstormParticleAction.class::isInstance)
+                .map(PreparedSandstormParticleAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Fireball should expose an on-cast Sandstorm particle action"));
+        PreparedSandstormParticleAction tickParticle = prepared.executeTick("default_entity_name", 2).stream()
+                .filter(PreparedSandstormParticleAction.class::isInstance)
+                .map(PreparedSandstormParticleAction.class::cast)
+                .findFirst()
+                .orElseThrow(() -> helper.assertionException("Fireball component should expose a projectile tick Sandstorm particle action"));
+
+        helper.assertValueEqual(Identifier.fromNamespaceAndPath("esekai2", "fireball_cast_burst"), onCastParticle.particleId(),
+                "Fireball on-cast particle should use the bundled cast particle id");
+        helper.assertValueEqual(Identifier.fromNamespaceAndPath("esekai2", "fireball_trail_burst"), tickParticle.particleId(),
+                "Fireball projectile tick particle should use the bundled trail particle id");
         helper.succeed();
     }
 
@@ -1005,8 +1144,10 @@ public final class SkillExecutionGameTests {
                 .findFirst()
                 .orElseThrow(() -> helper.assertionException("Fireball should expose a sandstorm particle action"));
 
-        helper.assertValueEqual(sandstormAction.parameters().get("anchor"), "caster_hand", "Fireball should keep the anchor metadata");
-        helper.assertValueEqual(sandstormAction.parameters().get("offset_y"), "0.5", "Fireball should keep the offset metadata");
+        helper.assertValueEqual("caster_hand", sandstormAction.parameters().get("anchor"), "Fireball should keep the anchor metadata");
+        helper.assertValueEqual("0.5", sandstormAction.parameters().get("offset_y"), "Fireball should keep the offset metadata");
+        helper.assertValueEqual("esekai2:fireball_cast_burst", sandstormAction.parameters().get("particle_id"),
+                "Fireball fixture should decode with the bundled cast particle id");
         helper.succeed();
     }
 
@@ -2017,8 +2158,8 @@ public final class SkillExecutionGameTests {
                 thirdHooks
         );
 
-        helper.assertValueEqual(first.executedActions(), 1, "The burst opener should execute its single on-cast action");
-        helper.assertValueEqual(second.executedActions(), 1, "The allowed direct follow-up should execute once inside the active burst window");
+        helper.assertValueEqual(first.executedActions(), 1, "The burst opener should execute its sound action under recording hooks");
+        helper.assertValueEqual(second.executedActions(), 1, "The allowed direct follow-up should execute its sound action under recording hooks");
         helper.assertValueEqual(firstHooks.soundCount(), 1, "The burst opener should emit one sound action");
         helper.assertValueEqual(secondHooks.soundCount(), 1, "The burst follow-up should emit one sound action");
         helper.assertValueEqual(
@@ -2041,7 +2182,7 @@ public final class SkillExecutionGameTests {
             );
 
             helper.assertValueEqual(reopened.executedActions(), 1,
-                    "After burst expiry, the next direct cast should open a fresh burst");
+                    "After burst expiry, the next direct cast should reopen a fresh burst under recording hooks");
             helper.assertValueEqual(reopenedHooks.soundCount(), 1, "The reopened burst opener should execute its on-cast sound once");
             helper.assertValueEqual(
                     PlayerSkillBursts.activeBurst(player, BURST_STRIKE_SKILL_ID, helper.getLevel().getGameTime())
@@ -2073,7 +2214,7 @@ public final class SkillExecutionGameTests {
 
         SkillExecutionResult opener = Skills.executeOnCast(executionContext);
 
-        helper.assertValueEqual(opener.executedActions(), 1, "The burst opener should execute successfully");
+        helper.assertValueEqual(opener.executedActions(), 2, "The burst opener should execute both its sound and particle actions successfully");
         helper.assertValueEqual(SkillValueExpression.burstRemaining().resolve(executionContext), 1.0,
                 "burst_remaining should expose the remaining follow-up cast after the opener");
         helper.assertTrue(SkillPredicate.hasBurstFollowup().matches(executionContext),
@@ -2081,7 +2222,7 @@ public final class SkillExecutionGameTests {
 
         SkillExecutionResult followup = Skills.executeOnCast(executionContext);
 
-        helper.assertValueEqual(followup.executedActions(), 1, "The allowed burst follow-up should execute successfully");
+        helper.assertValueEqual(followup.executedActions(), 2, "The allowed burst follow-up should execute both its sound and particle actions successfully");
         helper.assertValueEqual(SkillValueExpression.burstRemaining().resolve(executionContext), 0.0,
                 "burst_remaining should return to zero after the final follow-up is consumed");
         helper.assertFalse(SkillPredicate.hasBurstFollowup().matches(executionContext),
@@ -2127,15 +2268,15 @@ public final class SkillExecutionGameTests {
         );
 
         helper.assertValueEqual(firstBurst.executedActions(), 1,
-                "The initial direct burst opener should execute before the reset check");
+                "The initial direct burst opener should execute its sound action before the reset check");
         helper.assertValueEqual(secondBurst.executedActions(), 1,
-                "The second direct burst cast should exhaust the current burst before the reset check");
+                "The second direct burst cast should exhaust the current burst while only the sound hook completes");
         helper.assertTrue(otherSkill.executedActions() > 0,
                 "A different direct skill must execute successfully to reset the current burst window");
         helper.assertValueEqual(reopened.executedActions(), 1,
-                "After another skill succeeds, the original direct burst should reopen as a fresh opener");
+                "After another skill succeeds, the original direct burst should reopen while only the sound hook completes");
         helper.assertValueEqual(followUp.executedActions(), 1,
-                "The reopened direct burst should still allow one follow-up cast");
+                "The reopened direct burst should still allow one follow-up cast while only the sound hook completes");
         helper.succeed();
     }
 
@@ -2167,7 +2308,7 @@ public final class SkillExecutionGameTests {
                 new RecordingHooks()
         );
 
-        helper.assertValueEqual(first.executedActions(), 1, "The first direct burst-reserve cast should execute successfully");
+        helper.assertValueEqual(first.executedActions(), 1, "The first direct burst-reserve cast should execute its sound action under recording hooks");
         helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
                 "An immediate direct burst follow-up should still be blocked by cooldown before the remaining burst cast is consumed");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 16.0,
@@ -2197,7 +2338,7 @@ public final class SkillExecutionGameTests {
             );
 
             helper.assertValueEqual(followUp.executedActions(), 1,
-                    "Once cooldown expires inside the burst window, the stored direct follow-up should still execute");
+                    "Once cooldown expires inside the burst window, the stored direct follow-up should still execute its sound action under recording hooks");
             helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 12.0,
                     "The delayed direct follow-up should spend mana only when it actually executes");
             helper.assertValueEqual(PlayerSkillCharges.availableCharges(player, BURST_RESERVE_SKILL_ID, 2, helper.getLevel().getGameTime()), 0,
@@ -2237,7 +2378,7 @@ public final class SkillExecutionGameTests {
                 new RecordingHooks()
         );
 
-        helper.assertValueEqual(first.executedActions(), 1, "The opener mana-positive direct burst cast should execute successfully");
+        helper.assertValueEqual(first.executedActions(), 1, "The opener mana-positive direct burst cast should execute its sound action under recording hooks");
         helper.assertValueEqual(blocked.executedActions(), 0, "A mana-blocked direct follow-up should not execute runtime actions");
         helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("mana")),
                 "A mana-blocked direct follow-up should surface a mana warning");
@@ -2258,7 +2399,7 @@ public final class SkillExecutionGameTests {
         );
 
         helper.assertValueEqual(recovered.executedActions(), 1,
-                "Restoring mana inside the burst window should allow the remaining direct follow-up cast");
+                "Restoring mana inside the burst window should allow the remaining direct follow-up cast with its sound action under recording hooks");
         helper.assertValueEqual(
                 PlayerSkillBursts.activeBurst(player, BURST_FOCUS_SKILL_ID, helper.getLevel().getGameTime())
                         .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
@@ -2285,7 +2426,7 @@ public final class SkillExecutionGameTests {
         SkillExecutionContext context = SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie));
 
         SkillExecutionResult result = Skills.executeOnCast(context);
-        helper.assertValueEqual(result.executedActions(), 3, "Fireball on-cast should execute sound, projectile, and particle actions");
+        helper.assertValueEqual(3, result.executedActions(), "Fireball on-cast should execute sound, projectile, and particle actions");
 
         helper.runAfterDelay(10, () ->
                 helper.assertTrue(zombie.getHealth() < zombie.getMaxHealth(), "Projectile hit should damage the zombie target")
@@ -2334,14 +2475,14 @@ public final class SkillExecutionGameTests {
                 .orElseThrow(() -> helper.assertionException("Basic strike should decode successfully"));
     }
 
+    private static SkillDefinition skill(GameTestHelper helper, Identifier skillId) {
+        return skillRegistry(helper).getOptional(skillId)
+                .orElseThrow(() -> helper.assertionException("Skill should decode successfully: " + skillId));
+    }
+
     private static SkillDefinition fireball(GameTestHelper helper) {
         return skillRegistry(helper).getOptional(FIREBALL_SKILL_ID)
                 .orElseThrow(() -> helper.assertionException("Fireball should decode successfully"));
-    }
-
-    private static SkillDefinition skill(GameTestHelper helper, Identifier id) {
-        return skillRegistry(helper).getOptional(id)
-                .orElseThrow(() -> helper.assertionException("Skill should decode successfully: " + id));
     }
 
     private static SkillSupportDefinition support(GameTestHelper helper, Identifier id) {

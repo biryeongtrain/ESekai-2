@@ -21,6 +21,12 @@
           {
             "type": "sound",
             "sound_id": "minecraft:block.note_block.pling"
+          },
+          {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:arcane_burst_pulse",
+            "anchor": "self",
+            "offset_y": 1.0
           }
         ]
       }

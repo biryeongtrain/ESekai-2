@@ -3,6 +3,7 @@ package kim.biryeong.esekai2;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import kim.biryeong.esekai2.impl.ailment.AilmentBootstrap;
 import kim.biryeong.esekai2.impl.config.monster.MonsterAffixConfigManager;
+import kim.biryeong.esekai2.impl.command.EsekaiDebugCommands;
 import kim.biryeong.esekai2.impl.item.affix.AffixBootstrap;
 import kim.biryeong.esekai2.impl.item.level.ItemLevelBootstrap;
 import kim.biryeong.esekai2.impl.level.LevelBootstrap;
@@ -14,6 +15,7 @@ import kim.biryeong.esekai2.impl.player.resource.PlayerResourceRuntimeManager;
 import kim.biryeong.esekai2.impl.player.stat.PlayerCombatStatService;
 import kim.biryeong.esekai2.impl.runtime.ServerRuntimeAccess;
 import kim.biryeong.esekai2.impl.skill.entity.SkillEntityBootstrap;
+import kim.biryeong.esekai2.impl.skill.particle.SandstormParticleBootstrap;
 import kim.biryeong.esekai2.impl.skill.registry.SkillBootstrap;
 import kim.biryeong.esekai2.impl.stat.registry.StatBootstrap;
 import net.fabricmc.api.ModInitializer;
@@ -38,9 +40,11 @@ public class Esekai2 implements ModInitializer {
         MonsterAffixBootstrap.bootstrap();
         AilmentBootstrap.bootstrap();
         SkillBootstrap.bootstrap();
+        SandstormParticleBootstrap.bootstrap();
         SkillEntityBootstrap.bootstrap();
         MonsterLevelBootstrap.bootstrap();
         MonsterStatBootstrap.bootstrap();
+        EsekaiDebugCommands.bootstrap();
         PolymerResourcePackUtils.addModAssets(MOD_ID);
         PolymerResourcePackUtils.markAsRequired();
     }

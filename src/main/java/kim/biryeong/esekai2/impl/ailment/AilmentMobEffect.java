@@ -48,7 +48,8 @@ final class AilmentMobEffect extends MobEffect implements PolymerMobEffect {
 
     @Override
     public boolean applyEffectTick(ServerLevel level, LivingEntity livingEntity, int amplifier) {
-        return AilmentRuntime.tick(level, livingEntity, type);
+        AilmentRuntime.tick(level, livingEntity, type);
+        return AilmentRuntime.hasActivePayload(livingEntity, type);
     }
 
     @Override

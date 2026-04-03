@@ -23,6 +23,12 @@
             "sound_id": "minecraft:entity.player.attack.strong"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:stun_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.75
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 7.0

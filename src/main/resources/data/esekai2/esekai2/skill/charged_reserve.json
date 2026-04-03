@@ -22,6 +22,12 @@
           {
             "type": "sound",
             "sound_id": "minecraft:block.beacon.power_select"
+          },
+          {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:resource_charge_aura",
+            "anchor": "self",
+            "offset_y": 0.95
           }
         ]
       }

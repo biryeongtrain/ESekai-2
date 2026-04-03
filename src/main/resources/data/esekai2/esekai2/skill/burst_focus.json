@@ -21,6 +21,12 @@
           {
             "type": "sound",
             "sound_id": "minecraft:block.beacon.activate"
+          },
+          {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:focus_burst_pulse",
+            "anchor": "self",
+            "offset_y": 1.0
           }
         ]
       }

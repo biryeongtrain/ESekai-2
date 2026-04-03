@@ -28,6 +28,8 @@ public record AilmentPayload(
         int remainingTicks,
         int tickIntervalTicks
 ) {
+    public static final int DEFAULT_DAMAGE_TICK_INTERVAL_TICKS = 20;
+
     /**
      * Codec used by persistent entity attachments.
      */
@@ -38,7 +40,7 @@ public record AilmentPayload(
             Codec.DOUBLE.fieldOf("potency").forGetter(AilmentPayload::potency),
             Codec.INT.fieldOf("duration_ticks").forGetter(AilmentPayload::durationTicks),
             Codec.INT.fieldOf("remaining_ticks").forGetter(AilmentPayload::remainingTicks),
-            Codec.INT.optionalFieldOf("tick_interval_ticks", 1).forGetter(AilmentPayload::tickIntervalTicks)
+            Codec.INT.optionalFieldOf("tick_interval_ticks", DEFAULT_DAMAGE_TICK_INTERVAL_TICKS).forGetter(AilmentPayload::tickIntervalTicks)
     ).apply(instance, AilmentPayload::new));
 
     public AilmentPayload {
@@ -77,7 +79,13 @@ public record AilmentPayload(
      * @return {@code true} when the next runtime tick should apply periodic ailment damage
      */
     public boolean shouldTriggerDamageTick() {
-        return type.isDamageOverTime() && remainingTicks > 0 && remainingTicks % tickIntervalTicks == 0;
+        if (!type.isDamageOverTime()) {
+            return false;
+        }
+        if (remainingTicks <= 0) {
+            return durationTicks > 0;
+        }
+        return remainingTicks % tickIntervalTicks == 0;
     }
 
     /**

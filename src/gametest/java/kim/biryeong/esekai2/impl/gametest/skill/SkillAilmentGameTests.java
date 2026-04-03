@@ -179,7 +179,7 @@ public final class SkillAilmentGameTests {
     @GameTest
     public void igniteAppliesAttachmentBackedEffectAndTicks(GameTestHelper helper) {
         Player caster = helper.makeMockPlayer(GameType.CREATIVE);
-        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.COW, new Vec3(3.0, 2.0, 3.0));
+        LivingEntity zombie = helper.spawnWithNoFreeWill(EntityType.ZOMBIE, new Vec3(3.0, 2.0, 3.0));
         PreparedSkillUse prepared = Skills.prepareUse(
                 kindlingStrike(helper),
                 skillUseContext(
@@ -195,30 +195,40 @@ public final class SkillAilmentGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(zombie))
         );
 
-        helper.assertValueEqual(result.executedActions(), 3, "Kindling strike should execute sound, damage, and ailment actions");
+        helper.assertValueEqual(4, result.executedActions(), "Kindling strike should execute sound, particle, damage, and ailment actions");
+        float healthAfterHit = zombie.getHealth();
         helper.assertTrue(
                 zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
                 "Ignite should be represented by a MobEffect identity"
         );
         helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isPresent(),
                 "Ignite should also store an attachment payload on the target");
-        helper.assertTrue(!AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
-                "Ignite should not deal damage on the first runtime tick");
-        zombie.invulnerableTime = 0;
-        helper.assertTrue(AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
-                "Ignite should deal periodic damage on its next interval tick");
-        for (int tick = 0; tick < 6; tick++) {
-            AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE);
-        }
-        float settledHealth = zombie.getHealth();
-        helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isEmpty(),
-                "Expired ignite should clear its attachment payload");
-        helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
-                "Expired ignite should clear its MobEffect identity");
-        helper.assertTrue(!AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
-                "Expired ignite should stop producing periodic damage");
-        helper.assertValueEqual(zombie.getHealth(), settledHealth, "Expired ignite should stop dealing damage after its duration expires");
-        helper.succeed();
+        helper.runAfterDelay(1, () -> {
+            helper.assertTrue(
+                    zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
+                    "Ignite identity should survive the first non-damage runtime tick"
+            );
+            helper.assertTrue(
+                    Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isPresent(),
+                    "Ignite payload should survive the first non-damage runtime tick"
+            );
+            helper.assertValueEqual(zombie.getHealth(), healthAfterHit,
+                    "Ignite should not deal damage on its first runtime tick");
+            helper.runAfterDelay(7, () -> {
+                helper.assertTrue(zombie.getHealth() < healthAfterHit,
+                        "Short ignite should deal its periodic damage at expiry when its duration is under one second");
+                helper.assertTrue(Ailments.get(zombie).flatMap(state -> state.get(AilmentType.IGNITE)).isEmpty(),
+                        "Expired ignite should clear its attachment payload");
+                helper.assertTrue(!zombie.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.IGNITE))),
+                        "Expired ignite should clear its MobEffect identity");
+                helper.assertTrue(!AilmentRuntime.tick(helper.getLevel(), zombie, AilmentType.IGNITE),
+                        "Expired ignite should stop producing periodic damage");
+                float settledHealth = zombie.getHealth();
+                helper.assertValueEqual(zombie.getHealth(), settledHealth,
+                        "Expired ignite should stop dealing damage after its duration expires");
+                helper.succeed();
+            });
+        });
     }
 
     /**
@@ -279,10 +289,34 @@ public final class SkillAilmentGameTests {
                 "Poison should store an attachment payload");
         helper.assertTrue(Ailments.get(bleedTarget).flatMap(state -> state.get(AilmentType.BLEED)).isPresent(),
                 "Bleed should store an attachment payload");
-        helper.runAfterDelay(3, () -> {
-            helper.assertTrue(poisonTarget.getHealth() < poisonInitialHealth, "Poison should deal periodic damage");
-            helper.assertTrue(bleedTarget.getHealth() < bleedInitialHealth, "Bleed should deal periodic damage");
-            helper.succeed();
+        helper.assertTrue(poisonTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.POISON))),
+                "Poison should apply a MobEffect identity");
+        helper.assertTrue(bleedTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.BLEED))),
+                "Bleed should apply a MobEffect identity");
+        helper.runAfterDelay(1, () -> {
+            helper.assertTrue(poisonTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.POISON))),
+                    "Poison identity should survive the first non-damage runtime tick");
+            helper.assertTrue(bleedTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.BLEED))),
+                    "Bleed identity should survive the first non-damage runtime tick");
+            float poisonAfterFirstRuntimeTick = poisonTarget.getHealth();
+            helper.runAfterDelay(7, () -> {
+                helper.assertTrue(bleedTarget.getHealth() < bleedInitialHealth,
+                        "Bleed should deal its periodic damage at expiry when its duration is under one second");
+                helper.assertTrue(!bleedTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.BLEED))),
+                        "Short bleed should clear its identity after the expiry damage tick");
+                helper.assertValueEqual(poisonTarget.getHealth(), poisonAfterFirstRuntimeTick,
+                        "Poison should not tick before one full second elapses");
+                helper.assertTrue(poisonTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.POISON))),
+                        "Poison identity should remain active before its first one-second interval");
+                helper.runAfterDelay(12, () -> {
+                    helper.assertTrue(poisonTarget.getHealth() < poisonAfterFirstRuntimeTick,
+                            "Poison should deal periodic damage on its first one-second interval");
+                    helper.assertTrue(poisonTarget.getHealth() < poisonInitialHealth, "Poison should deal periodic damage");
+                    helper.assertTrue(poisonTarget.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.POISON))),
+                            "Poison identity should still be active after its first one-second damage interval");
+                    helper.succeed();
+                });
+            });
         });
     }
 
@@ -420,7 +454,7 @@ public final class SkillAilmentGameTests {
 
         AilmentPayload chillPayload = ailmentPayload(helper, target, AilmentType.CHILL);
         MobEffectInstance chillEffect = target.getEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.CHILL)));
-        helper.assertValueEqual(result.executedActions(), 3, "Chilling strike should execute sound, damage, and ailment actions");
+        helper.assertValueEqual(4, result.executedActions(), "Chilling strike should execute sound, particle, damage, and ailment actions");
         helper.assertTrue(chillEffect != null, "Chill should be represented by a MobEffect identity");
         helper.assertTrue(chillPayload.potency() > 0.0, "Chill should store a positive potency payload");
 
@@ -540,7 +574,7 @@ public final class SkillAilmentGameTests {
                 SkillExecutionContext.forCast(prepared, helper.getLevel(), caster, Optional.of(target))
         );
 
-        helper.assertValueEqual(result.executedActions(), 3, "Glacial prison should execute sound, damage, and ailment actions");
+        helper.assertValueEqual(4, result.executedActions(), "Glacial prison should execute sound, particle, damage, and ailment actions");
         helper.assertTrue(target.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect(AilmentType.FREEZE))),
                 "Freeze should be represented by a MobEffect identity");
         helper.assertTrue(Ailments.get(target).flatMap(state -> state.get(AilmentType.FREEZE)).isPresent(),
@@ -864,6 +898,7 @@ public final class SkillAilmentGameTests {
                                 Set.of(SkillTargetSelector.target()),
                                 List.of(
                                         new SkillAction(SkillActionType.SOUND, Map.of("sound_id", soundId)),
+                                        new SkillAction(SkillActionType.SANDSTORM_PARTICLE, ailmentParticleParameters(ailmentType)),
                                         new SkillAction(SkillActionType.DAMAGE, Map.of("base_damage_physical", Double.toString(physicalDamage))),
                                         new SkillAction(SkillActionType.APPLY_AILMENT, Map.of(
                                                 "ailment_id", ailmentType.serializedName(),
@@ -882,5 +917,21 @@ public final class SkillAilmentGameTests {
                 Set.of(),
                 ""
         );
+    }
+
+    private static Map<String, String> ailmentParticleParameters(AilmentType ailmentType) {
+        return switch (ailmentType) {
+            case CHILL -> Map.of(
+                    "particle_id", "esekai2:frost_strike_burst",
+                    "anchor", "target",
+                    "offset_y", "0.85"
+            );
+            case FREEZE -> Map.of(
+                    "particle_id", "esekai2:freeze_strike_burst",
+                    "anchor", "target",
+                    "offset_y", "0.8"
+            );
+            default -> throw new IllegalArgumentException("Unsupported inline ailment particle fixture: " + ailmentType);
+        };
     }
 }

@@ -20,6 +20,12 @@
           {
             "type": "sound",
             "sound_id": "minecraft:block.amethyst_block.hit"
+          },
+          {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:barrier_guard_aura",
+            "anchor": "self",
+            "offset_y": 1.0
           }
         ]
       }

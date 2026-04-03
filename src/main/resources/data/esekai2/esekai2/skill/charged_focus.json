@@ -24,6 +24,12 @@
             "sound_id": "minecraft:block.amethyst_block.chime"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:charged_focus_aura",
+            "anchor": "self",
+            "offset_y": 1.0
+          },
+          {
             "type": "apply_buff",
             "effect_id": "minecraft:glowing",
             "duration_ticks": 20,

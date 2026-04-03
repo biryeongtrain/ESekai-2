@@ -26,11 +26,11 @@
 
 ### Progress Snapshot
 
-- 완료된 기반 작업은 현재 60개입니다.
+- 완료된 기반 작업은 현재 61개입니다.
 - 현재 활성 백로그는 1개입니다.
   - `Full data-driven skill system`
 - 마지막 안정 검증 기준은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 377개가 전부 통과했습니다.
+- 최신 안정 기준에서는 required Fabric GameTest 381개가 전부 통과했습니다.
 
 ### Aggregate Coverage
 
@@ -57,6 +57,7 @@
   - `MobEffect` 기반 buff/debuff authoring 이 `refresh_policy` 와 함께 datapack/schema/runtime/support override 경로에 연결되어 있습니다.
   - `IGNITE`, `SHOCK`, `POISON`, `BLEED`, `CHILL`, `FREEZE`, `STUN` 은 `MobEffect + attachment payload` 구조로 실제 runtime tick, damage amplification, movement control, cast-block 경로에 연결되어 있습니다.
   - control ailment 후속 polish 가 반영되어 `CHILL` 30% cap, `FREEZE/STUN` negative purge cleanup, runtime contract Javadoc, GameTest validation closure 가 정리되었습니다.
+  - bundled Sandstorm particle bootstrap 이 추가되어 공격형과 버프/정화/자원형 sample skill fixture 들이 `esekai2:*` custom particle id 로 on-cast / projectile tick effect 를 사용할 수 있습니다.
   - 현재는 minimum runtime 까지이며, fully data-driven execution 은 backlog 에 남아 있습니다.
 - 몬스터 시스템
   - monster stat baseline, monster level scaling, rarity 기반 item level derivation 이 구현되어 있습니다.
@@ -374,10 +375,15 @@
    - `CHANGELOG.md` 의 `0.1.0-alpha.1` 는 initial packaging pass 수준에서 실제 alpha capability summary 수준으로 확장되었고, release-facing validation command 는 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 로 정리되었습니다.
    - 현재 release verdict 는 `개발 서버 / 기술 프리뷰 배포 가능, 안정 공개 릴리즈는 아님` 으로 유지하고, 다음 release relevance 작업은 dedicated server smoke / stable checklist closure 로 고정합니다.
 
+61. Bundled Sandstorm support particle expansion
+   - `SandstormParticleBootstrap` 에 support/buff/cleanse/resource 계열 custom particle id 가 추가되어 `battle_focus`, `burst_focus`, `charged_focus`, `cleanse_focus`, `cleanse_spectrum`, `cathartic_wave`, `purity_wave`, `tainted_release`, `blank_slate`, `purging_hex`, `mana_surge`, `restorative_pulse`, `overworld_barrier`, `burst_reserve`, `charged_reserve`, `charged_surge` fixture 가 bundled particle 을 참조하도록 확장되었습니다.
+   - support 계열 fixture 는 `focus_guard_aura`, `focus_burst_pulse`, `charged_focus_aura`, `cleanse_wave_ring`, `resource_charge_aura`, `restorative_pulse_ring`, `barrier_guard_aura` 리소스를 통해 on-cast 시전/정화/보호막 성격에 맞는 visual flavor 를 갖도록 정리되었습니다.
+   - updated `SkillExecutionGameTests`, updated `SkillExternalEffectGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 까지 포함해 required Fabric GameTest 381개 green baseline 이 검증되었습니다.
+
 ### Existing Verification Baseline
 
 - 마지막 안정 기준으로 통과한 명령은 `./gradlew --console=plain compileJava compileGametestJava runGameTest` 입니다.
-- 최신 안정 기준에서는 required Fabric GameTest 377개 전부 통과입니다.
+- 최신 안정 기준에서는 required Fabric GameTest 381개 전부 통과입니다.
 - 현재 유지되어야 하는 GameTest 범위는 아래와 같습니다.
   - 모드 로드 스모크 테스트
   - `StatDefinition` 로드 테스트
@@ -563,14 +569,17 @@
 ## Next Focus
 
 - 현재 다음 최소 작업은 dedicated server smoke / stable checklist closure 입니다.
-- 직전 완료된 승인 단위는 publish-facing documentation refresh 입니다.
-- 직전 완료 단위로 `README.md`, `CHANGELOG.md`, release-facing validation command, current alpha verdict, known limitation wording 이 현재 377-test baseline 기준으로 정리되었습니다.
+- 직전 완료된 승인 단위는 bundled Sandstorm support particle expansion 입니다.
+- 직전 완료 단위로 support/buff/cleanse/resource 계열 bundled Sandstorm particle bootstrap, `battle_focus`/`burst_focus`/`charged_focus`/`cleanse_focus`/`cleanse_spectrum`/`cathartic_wave`/`purity_wave`/`tainted_release`/`blank_slate`/`purging_hex`/`mana_surge`/`restorative_pulse`/`overworld_barrier`/`burst_reserve`/`charged_reserve`/`charged_surge` fixture particle 연결, updated `SkillExecutionGameTests`, updated `SkillExternalEffectGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 가 추가되었습니다.
+- 직전 완료 단위 검증으로 required Fabric GameTest 381 green baseline 이 갱신되었습니다.
+- 그 직전 완료된 승인 단위는 publish-facing documentation refresh 입니다.
+- 그 직전 완료 단위로 `README.md`, `CHANGELOG.md`, release-facing validation command, current alpha verdict, known limitation wording 이 현재 377-test baseline 기준으로 정리되었습니다.
 - 현재 release verdict 는 `개발 서버 / 기술 프리뷰 배포 가능, 안정 공개 릴리즈는 아님` 입니다.
 - 그 다음 release relevance 후보는 remaining release stabilization cleanup 입니다.
 - 그 다음 large follow-up 후보는 Trinkets 실제 장착 주입 입니다.
 - 직전 완료된 승인 단위는 prepared-state graph reuse follow-up 입니다.
 - 이번 완료 단위로 `SkillPreparedStateLookup`, `SkillValueExpression.resource_cost/use_time_ticks/cooldown_ticks/max_charges/times_to_cast`, prepared-state-bound `SkillUseContext`, graph payload prepared-state reuse, widened `SkillConfigOverride` (`cast_time_ticks`, `cooldown_ticks`, `times_to_cast`, `charges`), `prepared_state_probe`, `support_prepared_state_tuning`, updated `SkillValueGameTests`, updated `SkillSupportGameTests`, updated `SelectedSkillCastGameTests`, `build/junit.xml` validation closure 가 추가되었습니다.
-- 이번 완료 단위 검증으로 required Fabric GameTest 377 green baseline 이 갱신되었습니다.
+- 그 직전 완료 단위 검증으로 required Fabric GameTest 377 green baseline 이 갱신되었습니다.
 - 그 직전 완료된 승인 단위는 resource-authoring parity + control ailment formula polish + release stabilization 입니다.
 - 그 직전 완료 단위로 `SkillSupportEffect.config_overrides`, `SkillConfigOverride`, selected/direct resource override runtime parity, `CombatStats.AILMENT_THRESHOLD`, `FREEZE_DURATION_INCREASED`, `STUN_DURATION_INCREASED`, `AilmentRuntime` freeze/stun effective duration formula, zero-threshold `LIFE` fallback contract, direct dimension identifier resolution, monster affix expected-warning/logging split, updated `SkillExecutionGameTests`, updated `SelectedSkillCastGameTests`, updated `AilmentControlGameTests`, `GameTestPlayers`, `build/junit.xml` validation closure 가 추가되었습니다.
 - 그 직전 완료 단위 검증으로 required Fabric GameTest 371 green baseline 이 갱신되었습니다.

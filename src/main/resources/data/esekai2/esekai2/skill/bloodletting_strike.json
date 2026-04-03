@@ -23,6 +23,12 @@
             "sound_id": "minecraft:entity.player.attack.crit"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:bleed_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.8
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 10.0

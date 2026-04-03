@@ -101,6 +101,21 @@ public final class PlayerSkillBurstService {
         return updated;
     }
 
+    public static PlayerSkillBurstState clear(ServerPlayer player, Identifier skillId, long gameTime) {
+        Objects.requireNonNull(player, "player");
+        return clear(requireServer(player), player.getUUID(), skillId, gameTime);
+    }
+
+    public static PlayerSkillBurstState clear(MinecraftServer server, UUID playerId, Identifier skillId, long gameTime) {
+        Objects.requireNonNull(server, "server");
+        Objects.requireNonNull(playerId, "playerId");
+        Objects.requireNonNull(skillId, "skillId");
+        PlayerSkillBurstState current = get(server, playerId, gameTime);
+        PlayerSkillBurstState updated = current.withEntry(skillId, null);
+        savedData(server).put(playerId, updated);
+        return updated;
+    }
+
     private static PlayerSkillBurstSavedData savedData(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(PlayerSkillBurstSavedData.TYPE);
     }

@@ -23,6 +23,12 @@
           {
             "type": "sound",
             "sound_id": "minecraft:block.respawn_anchor.charge"
+          },
+          {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:resource_charge_aura",
+            "anchor": "self",
+            "offset_y": 0.95
           }
         ]
       }

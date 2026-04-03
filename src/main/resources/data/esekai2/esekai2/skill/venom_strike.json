@@ -23,6 +23,12 @@
             "sound_id": "minecraft:entity.spider.ambient"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:toxic_strike_burst",
+            "anchor": "target",
+            "offset_y": 0.8
+          },
+          {
             "type": "damage",
             "base_damage": {
               "physical": 10.0
@@ -32,7 +38,7 @@
             "type": "apply_ailment",
             "ailment_id": "poison",
             "chance": 100.0,
-            "duration_ticks": 8,
+            "duration_ticks": 80,
             "potency_multiplier": 100.0
           }
         ]

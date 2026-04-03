@@ -22,6 +22,12 @@
             "sound_id": "minecraft:block.amethyst_cluster.break"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:cleanse_wave_ring",
+            "anchor": "self",
+            "offset_y": 0.95
+          },
+          {
             "type": "remove_effect",
             "purge": "all"
           }

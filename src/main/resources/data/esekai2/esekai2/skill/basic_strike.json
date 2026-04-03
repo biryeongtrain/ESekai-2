@@ -23,6 +23,13 @@
               "sound_id": "minecraft:block.anvil.land"
             },
             {
+              "type": "sandstorm_particle",
+              "particle_id": "esekai2:basic_strike_burst",
+              "anchor": "caster_hand",
+              "offset_y": -0.2,
+              "offset_z": 0.35
+            },
+            {
               "type": "damage",
               "calculation_id": "esekai2:basic_strike_primary_hit"
             }
@@ -82,9 +89,10 @@
           "acts": [
             {
               "type": "sandstorm_particle",
-              "particle_id": "sandstorm:magic",
+              "particle_id": "esekai2:basic_strike_burst",
               "anchor": "caster_hand",
-              "offset_y": 1.0
+              "offset_y": 0.15,
+              "offset_z": 0.45
             }
           ],
           "ifs": [

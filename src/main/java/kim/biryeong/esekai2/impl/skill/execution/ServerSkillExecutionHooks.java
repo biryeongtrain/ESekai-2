@@ -77,7 +77,7 @@ public final class ServerSkillExecutionHooks implements SkillExecutionHooks {
         }
 
         Vec3 position = resolveDefaultPosition(context, targets);
-        context.level().playSound(context.caster(), position.x(), position.y(), position.z(), soundEvent, SoundSource.PLAYERS, action.volume(), action.pitch());
+        context.level().playSound(null, position.x(), position.y(), position.z(), soundEvent, SoundSource.PLAYERS, action.volume(), action.pitch());
         return true;
     }
 

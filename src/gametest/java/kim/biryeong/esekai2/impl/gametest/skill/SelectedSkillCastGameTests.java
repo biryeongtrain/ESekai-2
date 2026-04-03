@@ -215,7 +215,7 @@ public final class SelectedSkillCastGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected active skill cast should succeed when the equipped item resolves correctly");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Basic strike cast should execute the expected on-cast actions");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Basic strike cast should execute sound, particle, and damage on-cast actions");
         helper.assertTrue(zombie.getHealth() < zombie.getMaxHealth(), "Selected active skill cast should apply its server-side hit effect");
         helper.succeed();
     }
@@ -268,7 +268,7 @@ public final class SelectedSkillCastGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected cast should succeed when the player has enough mana and no cooldown");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 2, "Battle focus should execute both its sound and buff actions");
+        helper.assertValueEqual(3, result.executionResult().orElseThrow().executedActions(), "Battle focus should execute sound, particle, and buff actions");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 12.0, "Successful selected casts should spend the prepared mana cost");
         helper.assertTrue(PlayerSkillCooldowns.isOnCooldown(player, BATTLE_FOCUS_SKILL_ID, helper.getLevel().getGameTime()),
                 "Successful selected casts should start the prepared cooldown");
@@ -565,7 +565,7 @@ public final class SelectedSkillCastGameTests {
         SelectedSkillCastResult firstCast = Skills.castSelectedSkill(player, context, Optional.empty());
         SelectedSkillCastResult secondCast = Skills.castSelectedSkill(player, context, Optional.empty());
 
-        helper.assertValueEqual(firstCast.executionResult().orElseThrow().executedActions(), 2, "The first selected battle focus cast should execute normally");
+        helper.assertValueEqual(firstCast.executionResult().orElseThrow().executedActions(), 3, "The first selected battle focus cast should execute sound, particle, and buff actions normally");
         helper.assertTrue(secondCast.success(), "Cooldown-blocked selected casts should still return a resolved execution result");
         helper.assertValueEqual(secondCast.executionResult().orElseThrow().executedActions(), 0, "Cooldown-blocked selected casts should not execute runtime actions");
         helper.assertTrue(secondCast.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
@@ -592,7 +592,7 @@ public final class SelectedSkillCastGameTests {
         );
 
         helper.assertTrue(result.success(), "Selected charged cast should resolve successfully when a stored charge is available");
-        helper.assertValueEqual(result.executionResult().orElseThrow().executedActions(), 1, "Charged surge should execute its single sound action");
+        helper.assertValueEqual(2, result.executionResult().orElseThrow().executedActions(), "Charged surge should execute both its sound and particle actions");
         helper.assertValueEqual(PlayerSkillCharges.availableCharges(player, CHARGED_SURGE_SKILL_ID, 1, helper.getLevel().getGameTime()), 0,
                 "A successful selected charged cast should consume one stored charge");
         helper.succeed();
@@ -785,10 +785,10 @@ public final class SelectedSkillCastGameTests {
 
         helper.assertTrue(first.success(), "The burst opener should resolve successfully for selected casts");
         helper.assertTrue(second.success(), "The follow-up burst cast should resolve successfully inside the active window");
-        helper.assertValueEqual(first.executionResult().orElseThrow().executedActions(), 1,
-                "The burst opener should execute its single on-cast action");
-        helper.assertValueEqual(second.executionResult().orElseThrow().executedActions(), 1,
-                "The allowed follow-up should also execute its single on-cast action");
+        helper.assertValueEqual(2, first.executionResult().orElseThrow().executedActions(),
+                "The burst opener should execute both its sound and particle on-cast actions");
+        helper.assertValueEqual(2, second.executionResult().orElseThrow().executedActions(),
+                "The allowed follow-up should also execute both on-cast actions");
         helper.assertValueEqual(
                 PlayerSkillBursts.activeBurst(player, BURST_STRIKE_SKILL_ID, helper.getLevel().getGameTime())
                         .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
@@ -804,8 +804,8 @@ public final class SelectedSkillCastGameTests {
         helper.runAfterDelay(11, () -> {
             SelectedSkillCastResult reopened = Skills.castSelectedSkill(player, context, Optional.empty());
 
-            helper.assertValueEqual(reopened.executionResult().orElseThrow().executedActions(), 1,
-                    "After the burst window expires, the next selected cast should open a fresh burst");
+            helper.assertValueEqual(2, reopened.executionResult().orElseThrow().executedActions(),
+                    "After the burst window expires, the next selected cast should open a fresh burst with both on-cast actions");
             helper.assertValueEqual(
                     PlayerSkillBursts.activeBurst(player, BURST_STRIKE_SKILL_ID, helper.getLevel().getGameTime())
                             .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)
@@ -838,16 +838,16 @@ public final class SelectedSkillCastGameTests {
         SelectedSkillCastResult reopened = Skills.castSelectedSkill(player, context, Optional.empty());
         SelectedSkillCastResult followUp = Skills.castSelectedSkill(player, context, Optional.empty());
 
-        helper.assertValueEqual(firstBurst.executionResult().orElseThrow().executedActions(), 1,
-                "The initial burst opener should execute before the reset check");
-        helper.assertValueEqual(secondBurst.executionResult().orElseThrow().executedActions(), 1,
-                "The second selected burst cast should exhaust the current burst before the reset check");
+        helper.assertValueEqual(2, firstBurst.executionResult().orElseThrow().executedActions(),
+                "The initial burst opener should execute both on-cast actions before the reset check");
+        helper.assertValueEqual(2, secondBurst.executionResult().orElseThrow().executedActions(),
+                "The second selected burst cast should exhaust the current burst after both on-cast actions execute");
         helper.assertTrue(otherSkill.executionResult().orElseThrow().executedActions() > 0,
                 "A different selected skill must execute successfully to reset the current burst window");
-        helper.assertValueEqual(reopened.executionResult().orElseThrow().executedActions(), 1,
-                "After another skill succeeds, the original skill should reopen its burst as a fresh opener");
-        helper.assertValueEqual(followUp.executionResult().orElseThrow().executedActions(), 1,
-                "The reopened selected burst should still allow its follow-up cast");
+        helper.assertValueEqual(2, reopened.executionResult().orElseThrow().executedActions(),
+                "After another skill succeeds, the original skill should reopen its burst with both on-cast actions");
+        helper.assertValueEqual(2, followUp.executionResult().orElseThrow().executedActions(),
+                "The reopened selected burst should still allow its follow-up cast with both on-cast actions");
         helper.succeed();
     }
 
@@ -868,8 +868,8 @@ public final class SelectedSkillCastGameTests {
         SelectedSkillCastResult first = Skills.castSelectedSkill(player, context, Optional.empty());
         SelectedSkillCastResult blocked = Skills.castSelectedSkill(player, context, Optional.empty());
 
-        helper.assertValueEqual(first.executionResult().orElseThrow().executedActions(), 1,
-                "The first selected burst-reserve cast should execute successfully");
+        helper.assertValueEqual(first.executionResult().orElseThrow().executedActions(), 2,
+                "The first selected burst-reserve cast should execute both its sound and particle actions");
         helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("cooldown")),
                 "An immediate burst follow-up should still be blocked by cooldown before the remaining burst cast is consumed");
         helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 16.0,
@@ -887,8 +887,8 @@ public final class SelectedSkillCastGameTests {
         helper.runAfterDelay(6, () -> {
             SelectedSkillCastResult followUp = Skills.castSelectedSkill(player, context, Optional.empty());
 
-            helper.assertValueEqual(followUp.executionResult().orElseThrow().executedActions(), 1,
-                    "Once cooldown expires inside the burst window, the stored follow-up cast should still execute");
+            helper.assertValueEqual(followUp.executionResult().orElseThrow().executedActions(), 2,
+                    "Once cooldown expires inside the burst window, the stored follow-up cast should still execute both on-cast actions");
             helper.assertValueEqual(PlayerResources.getMana(player, 20.0), 12.0,
                     "The delayed follow-up should spend mana only when it actually executes");
             helper.assertValueEqual(PlayerSkillCharges.availableCharges(player, BURST_RESERVE_SKILL_ID, 2, helper.getLevel().getGameTime()), 0,
@@ -921,8 +921,8 @@ public final class SelectedSkillCastGameTests {
         SelectedSkillCastResult first = Skills.castSelectedSkill(player, context, Optional.empty());
         SelectedSkillCastResult blocked = Skills.castSelectedSkill(player, context, Optional.empty());
 
-        helper.assertValueEqual(first.executionResult().orElseThrow().executedActions(), 1,
-                "The opener mana-positive selected burst cast should execute successfully");
+        helper.assertValueEqual(first.executionResult().orElseThrow().executedActions(), 2,
+                "The opener mana-positive selected burst cast should execute both its sound and particle actions");
         helper.assertValueEqual(blocked.executionResult().orElseThrow().executedActions(), 0,
                 "A mana-blocked selected follow-up should not execute runtime actions");
         helper.assertTrue(blocked.warnings().stream().anyMatch(warning -> warning.contains("mana")),
@@ -940,8 +940,8 @@ public final class SelectedSkillCastGameTests {
         PlayerResources.setMana(player, 6.0, 6.0);
         SelectedSkillCastResult recovered = Skills.castSelectedSkill(player, context, Optional.empty());
 
-        helper.assertValueEqual(recovered.executionResult().orElseThrow().executedActions(), 1,
-                "Restoring mana inside the burst window should allow the remaining selected follow-up cast");
+        helper.assertValueEqual(recovered.executionResult().orElseThrow().executedActions(), 2,
+                "Restoring mana inside the burst window should allow the remaining selected follow-up cast with both on-cast actions");
         helper.assertValueEqual(
                 PlayerSkillBursts.activeBurst(player, BURST_FOCUS_SKILL_ID, helper.getLevel().getGameTime())
                         .map(PlayerSkillBurstState.SkillBurstEntry::remainingCasts)

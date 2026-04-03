@@ -22,6 +22,12 @@
             "sound_id": "minecraft:block.amethyst_block.chime"
           },
           {
+            "type": "sandstorm_particle",
+            "particle_id": "esekai2:restorative_pulse_ring",
+            "anchor": "self",
+            "offset_y": 0.95
+          },
+          {
             "type": "heal",
             "amount": 4.0
           }
